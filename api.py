@@ -1241,8 +1241,11 @@ def _get_or_create_project(user_id, project_id, story_brief):
 
 def _persist_artifacts_to_project(script, story_brief, artifacts):
     """
-    把结果写回现有 ScriptModel，方便旧页面继续查看/编辑
+    把结果写回旧表，实现“旧页面降级成查看/编辑页”：
+    1. ScriptModel 作为总容器
+    2. CharacterModel / ChapterModel 至少生成一批可查看/可编辑的旧页记录
     """
+    # 1）先写 ScriptModel 总字段
     script.background = story_brief.get("framework_text", "") or script.background or ""
     script.knowledge = story_brief.get("reference_text", "") or script.knowledge or ""
     script.style = story_brief.get("style", "") or script.style or ""
@@ -1252,7 +1255,146 @@ def _persist_artifacts_to_project(script, story_brief, artifacts):
     script.characters = artifacts.get("character_bible", "") or script.characters or ""
     script.relationships = artifacts.get("character_bible", "")[:1000] or script.relationships or ""
     script.content = artifacts.get("final_script", "") or script.content or ""
+
     db.session.commit()
+
+    # 2）清空旧的角色和章节（MVP：每次重新覆盖）
+    CharacterModel.query.filter_by(script_id=script.id).delete()
+    ChapterModel.query.filter_by(script_id=script.id).delete()
+    db.session.commit()
+
+    # 3）把人物设定同步成旧角色表
+    character_text = artifacts.get("character_bible", "") or ""
+    _sync_character_bible_to_legacy_table(script.id, character_text)
+
+    # 4）把剧情大纲同步成旧章节表
+    outline_text = artifacts.get("plot_outline", "") or ""
+    _sync_outline_to_legacy_chapters(script.id, outline_text)
+
+    db.session.commit()
+
+
+def _sync_character_bible_to_legacy_table(script_id, character_text):
+    """
+    把人物设定文本同步成 CharacterModel
+    MVP 规则：
+    - 如果能识别出多个“## 人物名”块，就拆成多角色
+    - 如果拆不出来，就至少生成一个“角色总表”
+    """
+    text = (character_text or "").strip()
+    if not text:
+        return
+
+    # 优先按 Markdown 二级标题拆分
+    blocks = re.split(r'\n##\s+', '\n' + text)
+    parsed = []
+
+    for block in blocks:
+        block = block.strip()
+        if not block:
+            continue
+
+        lines = block.splitlines()
+        first_line = lines[0].strip()
+
+        # 跳过总标题
+        if "人物设定" in first_line and len(lines) == 1:
+            continue
+
+        # 尝试提取角色名
+        name = first_line
+        body = "\n".join(lines[1:]).strip() if len(lines) > 1 else ""
+
+        # 如果标题太长，不像人名，则放弃当角色块
+        if len(name) > 20 and not body:
+            continue
+
+        parsed.append({
+            "name": name[:100],
+            "description": body[:3000] if body else block[:3000]
+        })
+
+    # 如果拆不出来，就生成一个总表角色
+    if not parsed:
+        parsed = [{
+            "name": "角色总表",
+            "description": text[:3000]
+        }]
+
+    for item in parsed[:10]:
+        character = CharacterModel(
+            script_id=script_id,
+            name=item["name"] or "未命名角色",
+            gender="",
+            age=None,
+            description=item["description"],
+            personality=item["description"][:1000],
+            background=item["description"][:1000],
+            relationships=item["description"][:1000]
+        )
+        db.session.add(character)
+
+
+def _sync_outline_to_legacy_chapters(script_id, outline_text):
+    """
+    把剧情大纲同步成 ChapterModel
+    MVP 规则：
+    - 先尝试按“第X集 / 第X章 / ## 标题”拆分
+    - 如果拆不出来，就生成一个“剧情大纲总表”章节
+    """
+    text = (outline_text or "").strip()
+    if not text:
+        return
+
+    parts = []
+
+    # 尝试按“第X集 / 第X章”切
+    ep_parts = re.split(r'\n(?=第[0-9一二三四五六七八九十百]+[集章节])', text)
+    if len(ep_parts) > 1:
+        for idx, part in enumerate(ep_parts, start=1):
+            part = part.strip()
+            if not part:
+                continue
+            title_line = part.splitlines()[0].strip()
+            parts.append({
+                "number": idx,
+                "title": title_line[:200],
+                "outline": part[:10000]
+            })
+    else:
+        # 再尝试按 Markdown 二级标题切
+        md_parts = re.split(r'\n##\s+', '\n' + text)
+        for idx, part in enumerate(md_parts, start=1):
+            part = part.strip()
+            if not part:
+                continue
+            lines = part.splitlines()
+            title = lines[0].strip()[:200]
+            body = "\n".join(lines[1:]).strip() if len(lines) > 1 else part
+            parts.append({
+                "number": idx,
+                "title": title or f"第{idx}部分",
+                "outline": body[:10000]
+            })
+
+    # 如果还是没拆出来，就给一个总表
+    if not parts:
+        parts = [{
+            "number": 1,
+            "title": "剧情大纲总表",
+            "outline": text[:10000]
+        }]
+
+    for item in parts[:20]:
+        chapter = ChapterModel(
+            number=item["number"],
+            title=item["title"] or f"第{item['number']}章",
+            chapter_outline=item["outline"] or "暂无章节大纲",
+            chapter_content="",
+            chapter_script="",
+            script_id=script_id
+        )
+        db.session.add(chapter)
 
 
 def _run_chat_pipeline_async(flask_app, task_id, session_id, user_id, project_id, message, meta, selected_model):

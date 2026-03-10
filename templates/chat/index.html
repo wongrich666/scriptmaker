@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScriptMaker 聊天创作台</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}">
+</head>
+<body>
+<div class="chat-app">
+    <!-- 左侧：项目/入口 -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <h2>ScriptMaker</h2>
+            <p>对话式创作入口</p>
+        </div>
+
+        <div class="sidebar-section">
+            <button id="newChatBtn" class="primary-btn">新建对话</button>
+        </div>
+
+        <div class="sidebar-section">
+            <h3>旧页面入口（已降级）</h3>
+            <a id="advancedModeBtn" class="link-btn" href="{{ url_for('menu.index') }}">高级模式</a>
+            <a id="dashboardBtn" class="link-btn" href="{{ url_for('dashboard.index') }}">项目列表</a>
+        </div>
+
+        <div class="sidebar-section">
+            <h3>当前项目</h3>
+            <div id="projectInfo">
+                <div>project_id：<span id="projectIdText">未创建</span></div>
+                <div>task_id：<span id="taskIdText">未开始</span></div>
+                <div>状态：<span id="taskStatusText">空闲</span></div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- 中间：聊天区 -->
+    <main class="main-panel">
+        <header class="main-header">
+            <h1>剧本创作智能体</h1>
+            <p>输入需求，系统自动生成：人设 / 剧情 / 审核报告 / 最终结果</p>
+        </header>
+
+        <section id="messageList" class="message-list">
+            <div class="message system">
+                <div class="bubble">
+                    你好，请告诉我你想写什么题材、风格、集数、故事梗概。<br>
+                    如果你有参考作品，请填“参考内容”；如果你有既定框架，请填“框架内容”。
+                </div>
+            </div>
+        </section>
+
+        <section class="composer">
+            <div class="composer-fields">
+                <textarea id="messageInput" placeholder="请输入你的剧本需求，例如：我要一个都市复仇女频短剧，80集，前3秒必须强冲突。"></textarea>
+            </div>
+
+            <details class="meta-panel">
+                <summary>展开高级参数</summary>
+                <div class="meta-grid">
+                    <input id="genreInput" type="text" placeholder="题材（如：都市情感）">
+                    <input id="styleInput" type="text" placeholder="风格（如：女频短剧）">
+                    <input id="wordCountInput" type="text" placeholder="字数/集数（如：80集）">
+                    <input id="outputGranularityInput" type="text" value="outline" placeholder="输出粒度（outline / script）">
+                    <textarea id="referenceTextInput" placeholder="参考内容（触发换皮模式）"></textarea>
+                    <textarea id="frameworkTextInput" placeholder="框架内容（触发框架创作模式）"></textarea>
+                    <textarea id="bannedInput" placeholder="禁止项（如：不要失忆梗）"></textarea>
+                </div>
+            </details>
+
+            <div class="composer-actions">
+                <button id="sendBtn" class="primary-btn">发送需求</button>
+            </div>
+        </section>
+    </main>
+
+    <!-- 右侧：结果区 -->
+    <aside class="result-panel">
+        <div class="result-header">
+            <h2>结果详情</h2>
+        </div>
+
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="final">最终剧本</button>
+            <button class="tab-btn" data-tab="character">人物设定</button>
+            <button class="tab-btn" data-tab="outline">剧情大纲</button>
+            <button class="tab-btn" data-tab="review">审核报告</button>
+            <button class="tab-btn" data-tab="trace">生成过程</button>
+        </div>
+
+        <div class="tab-content active" id="tab-final">
+            <pre id="finalScriptBox">暂无内容</pre>
+            <div class="legacy-actions">
+                <a id="storyExportBtn" class="link-btn disabled" href="#" target="_blank">导出故事 txt</a>
+                <a id="scriptExportBtn" class="link-btn disabled" href="#" target="_blank">导出剧本 txt</a>
+                <a id="editScriptBtn" class="link-btn disabled" href="#" target="_blank">查看剧本详情 / 编辑</a>
+            </div>
+        </div>
+
+        <div class="tab-content" id="tab-character">
+            <pre id="characterBox">暂无内容</pre>
+            <div class="legacy-actions">
+                <a id="characterDetailBtn" class="link-btn disabled" href="#" target="_blank">查看角色详情 / 编辑</a>
+            </div>
+        </div>
+
+        <div class="tab-content" id="tab-outline">
+            <pre id="outlineBox">暂无内容</pre>
+            <div class="legacy-actions">
+                <a id="chapterDetailBtn" class="link-btn disabled" href="#" target="_blank">查看章节详情 / 编辑</a>
+            </div>
+        </div>
+
+        <div class="tab-content" id="tab-review">
+            <pre id="reviewBox">暂无内容</pre>
+        </div>
+
+        <div class="tab-content" id="tab-trace">
+            <pre id="traceBox">暂无内容</pre>
+        </div>
+    </aside>
+</div>
+
+<script>
+    window.chatConfig = {
+        sendUrl: "/api/chat/send",
+        taskBaseUrl: "/api/task/",
+        projectBaseUrl: "/api/project/"
+    };
+</script>
+<script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+</body>
+</html>
