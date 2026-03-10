@@ -1,0 +1,19 @@
+name: female_short_drama_v1
+pass_score: 75
+max_retry: 2
+
+dimensions:
+  opening_hook: 0.20
+  protagonist_pressure: 0.15
+  emotional_pull: 0.20
+  conflict_progression: 0.15
+  cliffhanger: 0.15
+  paid_motivation: 0.15
+
+rewrite_target_rule:
+  opening_hook: plot_writer
+  protagonist_pressure: chief_editor
+  emotional_pull: character_writer
+  conflict_progression: plot_writer
+  cliffhanger: plot_writer
+  paid_motivation: chief_editor

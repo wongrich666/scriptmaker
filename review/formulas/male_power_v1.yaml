@@ -1,0 +1,11 @@
+name: male_power_v1
+pass_score: 75
+max_retry: 2
+
+dimensions:
+  opening_hook: 0.15
+  identity_reveal: 0.20
+  suppression_payoff: 0.20
+  escalation: 0.20
+  domination_moment: 0.15
+  cliffhanger: 0.10

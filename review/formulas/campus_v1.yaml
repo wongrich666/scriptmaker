@@ -1,0 +1,11 @@
+name: campus_v1
+pass_score: 72
+max_retry: 2
+
+dimensions:
+  opening_hook: 0.15
+  youth_emotion: 0.20
+  relationship_tension: 0.20
+  campus_conflict: 0.15
+  growth_line: 0.15
+  cliffhanger: 0.15
