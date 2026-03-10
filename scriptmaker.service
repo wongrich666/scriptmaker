@@ -1,0 +1,22 @@
+[Unit]
+Description=ScriptMaker Application
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/scriptMaker
+Environment=PATH=/opt/scriptMaker/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=FLASK_ENV=production
+Environment=FLASK_APP=app.py
+Environment=FLASK_DEBUG=false
+Environment=PYTHONPATH=/opt/scriptMaker
+ExecStart=/opt/scriptMaker/venv/bin/python /opt/scriptMaker/app.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target 

@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <title>注册 - 剧本管理系统</title>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='bootstrap.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='dark-theme.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .video-container {
+            height: 100vh;
+            overflow: hidden;
+            padding: 0;
+        }
+        .video-container video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .register-container {
+            display: flex;
+            align-items: center;
+            height: 100vh;
+            padding: 2rem;
+            background: rgba(33, 37, 41, 0.8);
+        }
+        .form-container {
+            width: 100%;
+            max-width: 450px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        .form-control, .btn {
+            border-radius: 0;
+        }
+        .form-control {
+            background-color: transparent !important;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .form-control:focus {
+            border-color: rgba(255, 255, 255, 0.5);
+            box-shadow: none;
+        }
+        .nav-tabs .nav-link {
+            color: rgba(255, 255, 255, 0.7);
+            border: none;
+            border-bottom: 2px solid transparent;
+            border-radius: 0;
+            padding: 10px 15px;
+        }
+        .nav-tabs .nav-link.active {
+            color: #fff;
+            background-color: transparent;
+            border-bottom: 2px solid #fff;
+        }
+        .tab-content {
+            padding-top: 20px;
+        }
+        .wechat-qr {
+            max-width: 200px;
+            margin: 0 auto;
+            display: block;
+        }
+        .wechat-tip {
+            text-align: center;
+            margin-top: 15px;
+        }
+    </style>
+
+    <style>
+        /* PC端样式优化 */
+        @media (min-width: 768px) {
+            .container {
+                max-width: 1200px;
+            }
+            h1, h2, h3, h4, h5, h6 {
+                font-size: 1.2em;
+            }
+            .form-control {
+                font-size: 1rem;
+                padding: 0.75rem;
+            }
+            .btn {
+                font-size: 1rem;
+                padding: 0.75rem 1.5rem;
+            }
+        }
+        
+        /* 移动端样式 */
+        @media (max-width: 767px) {
+            h1, h2, h3, h4, h5, h6 {
+                font-size: 1em;
+            }
+            .form-control {
+                font-size: 16px; /* 防止iOS缩放 */
+                padding: 0.5rem;
+            }
+            .btn {
+                font-size: 1rem;
+                padding: 0.5rem 1rem;
+            }
+        }
+    </style>
+</head>
+<body class="bg-dark text-light">
+    <div class="row g-0">
+        <div class="col-md-6 video-container">
+            <video height="100%" autoplay loop muted playsinline>
+                <source src="{{ url_for('static', filename='media/视频.mp4') }}" type="video/mp4">
+                您的浏览器不支持视频播放。
+            </video>
+        </div>
+        <div class="col-md-6 register-container">
+            <div class="form-container">
+                <div class="text-center mb-4">
+                    <img src="{{ url_for('static', filename='media/虚空02.png') }}" alt="Logo" style="max-width: 200px; margin-bottom: 2rem;">
+                </div>
+                <h2 class="text-center mb-4">注册</h2>
+                {% with messages = get_flashed_messages() %}
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="alert alert-danger">{{ message }}</div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+                
+                <ul class="nav nav-tabs mb-4" id="registerTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="email-tab" data-bs-toggle="tab" data-bs-target="#email-form" type="button" role="tab" aria-controls="email-form" aria-selected="true">普通注册</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="wechat-tab" data-bs-toggle="tab" data-bs-target="#wechat-form" type="button" role="tab" aria-controls="wechat-form" aria-selected="false">微信扫码注册</button>
+                    </li>
+                </ul>
+                
+                <div class="tab-content" id="registerTabsContent">
+                    <!-- 普通注册表单 -->
+                    <div class="tab-pane fade show active" id="email-form" role="tabpanel" aria-labelledby="email-tab">
+                        <form method="POST">
+                            <div class="mb-3">
+                                <label for="email" class="form-label">邮件/手机</label>
+                                <input type="text" class="form-control bg-dark text-light" id="email" name="email" required placeholder="请输入邮箱或手机号">
+                            </div>
+                            <div class="mb-3">
+                                <label for="password" class="form-label">密码</label>
+                                <input type="password" class="form-control bg-dark text-light" id="password" name="password" required>
+                            </div>
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-primary">注册</button>
+                            </div>
+                        </form>
+                    </div>
+                    
+                    <!-- 微信扫码注册 -->
+                    <div class="tab-pane fade" id="wechat-form" role="tabpanel" aria-labelledby="wechat-tab">
+                        <div class="text-center">
+                            <!-- 微信二维码显示区域 -->
+                            <div id="wechat-qr-container" class="border border-light p-3 mb-2" style="max-width: 200px; margin: 0 auto;">
+                                <div class="text-center p-4" id="qr-loading">
+                                    <div class="spinner-border text-light" role="status">
+                                        <span class="visually-hidden">正在加载二维码...</span>
+                                    </div>
+                                    <p class="mt-2">加载中...</p>
+                                </div>
+                                <img id="wechat-qr-img" style="max-width: 100%; display: none;" alt="微信二维码">
+                            </div>
+                            <p class="wechat-tip mt-3">请使用微信扫描二维码进行注册</p>
+                            <p class="text-muted small" id="qr-refresh-tip">二维码有效期为10分钟</p>
+                            <div id="wechat-status" class="mt-2 text-info"></div>
+                            <button id="refresh-qrcode" class="btn btn-outline-light btn-sm mt-3" style="display: none;">刷新二维码</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="text-center mt-3">
+                    <p>已有账号？ <a href="{{ url_for('auth.login') }}">立即登录</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="{{ url_for('static', filename='js/jquery-3.6.0.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/wechat-debug.js') }}"></script>
+    <script>
+        // 微信扫码注册检查状态
+        let checkInterval;
+        let currentSceneStr = '';
+        
+        $('#wechat-tab').on('shown.bs.tab', function (e) {
+            // 获取新的二维码
+            getNewQrcode('register');
+        });
+        
+        $('#email-tab').on('shown.bs.tab', function (e) {
+            // 切换回普通注册时停止轮询
+            stopQrCodeCheck();
+        });
+        
+        $('#refresh-qrcode').on('click', function() {
+            getNewQrcode('register');
+        });
+        
+        function getNewQrcode(action) {
+            // 显示加载状态
+            $('#qr-loading').show();
+            $('#wechat-qr-img').hide();
+            $('#refresh-qrcode').hide();
+            $('#wechat-status').text('正在获取二维码...');
+            
+            // 停止之前的检查
+            stopQrCodeCheck();
+            
+            // 请求新的二维码
+            $.ajax({
+                url: '{{ url_for("auth.wechat_qrcode", action="register") }}',
+                method: 'GET',
+                success: function(data) {
+                    console.log('获取二维码响应:', data); // 添加调试日志
+                    
+                    if (data.success) {
+                        // 保存场景值
+                        currentSceneStr = data.scene_str;
+                        
+                        // 显示二维码
+                        $('#wechat-status').text('二维码加载中...');
+                        
+                        let qrImg = $('#wechat-qr-img');
+                        qrImg.attr('src', data.qrcode_url);
+                        
+                        // 监听图片加载事件
+                        qrImg.on('load', function() {
+                            console.log('二维码图片加载成功'); // 添加调试日志
+                            $('#qr-loading').hide();
+                            $(this).show();
+                            $('#wechat-status').text('请使用微信扫描上方二维码');
+                        });
+                        
+                        // 监听图片加载失败事件
+                        qrImg.on('error', function() {
+                            console.error('二维码图片加载失败'); // 添加调试日志
+                            $('#wechat-status').text('二维码加载失败，请点击刷新');
+                            $('#qr-loading').hide();
+                            $('#refresh-qrcode').show();
+                        });
+                        
+                        // 开始轮询检查状态
+                        checkInterval = setInterval(checkWechatScanStatus, 3000);
+                    } else {
+                        $('#wechat-status').text('获取二维码失败: ' + (data.message || '未知错误'));
+                        $('#qr-loading').hide();
+                        $('#refresh-qrcode').show();
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('AJAX错误:', xhr, status, error); // 添加调试日志
+                    $('#wechat-status').text('获取二维码请求失败，请刷新页面重试');
+                    $('#qr-loading').hide();
+                    $('#refresh-qrcode').show();
+                }
+            });
+        }
+        
+        function stopQrCodeCheck() {
+            if (checkInterval) {
+                clearInterval(checkInterval);
+                checkInterval = null;
+            }
+        }
+        
+        function checkWechatScanStatus() {
+            if (!currentSceneStr) return;
+            
+            // 检查扫码状态
+            $.ajax({
+                url: '{{ url_for("auth.check_wechat_scan") }}',
+                method: 'GET',
+                data: { scene_str: currentSceneStr },
+                success: function(data) {
+                    console.log('检查扫码状态响应:', data);
+                    
+                    if (data.message === '二维码已过期') {
+                        $('#wechat-status').text('二维码已过期，请刷新');
+                        $('#wechat-status').addClass('text-danger').removeClass('text-info text-success');
+                        stopQrCodeCheck();
+                        $('#refresh-qrcode').show();
+                        return;
+                    }
+                    
+                    if (data.scanned) {
+                        if (data.registered) {
+                            // 注册成功，停止检查并跳转
+                            $('#wechat-status').text(data.message || '注册成功，正在跳转...');
+                            $('#wechat-status').addClass('text-success').removeClass('text-info text-danger');
+                            stopQrCodeCheck();
+                            
+                            // 如果有重定向URL，则跳转
+                            if (data.redirect_url) {
+                                setTimeout(function() {
+                                    window.location.href = data.redirect_url;
+                                }, 1000);
+                            }
+                        } else {
+                            // 扫码成功但未完成注册
+                            $('#wechat-status').text(data.message || '扫码成功，请完成注册');
+                            $('#wechat-status').addClass('text-warning').removeClass('text-info text-success text-danger');
+                        }
+                    } else {
+                        // 显示当前状态
+                        if ($('#wechat-status').text() === '请使用微信扫描上方二维码') {
+                            // 状态未变，不更新
+                        } else {
+                            $('#wechat-status').text('请使用微信扫描上方二维码');
+                            $('#wechat-status').addClass('text-info').removeClass('text-success text-danger');
+                        }
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('检查扫码状态错误:', xhr, status, error);
+                    $('#wechat-status').text('检查扫码状态失败，请刷新页面重试');
+                    $('#wechat-status').addClass('text-danger').removeClass('text-info text-success');
+                    stopQrCodeCheck();
+                    $('#refresh-qrcode').show();
+                }
+            });
+        }
+    </script>
+</body>
+</html> 

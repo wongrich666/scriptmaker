@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <title>文案生成 - 剧本管理系统</title>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='bootstrap.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='dark-theme.css') }}">
+
+    <style>
+        /* PC端样式优化 */
+        @media (min-width: 768px) {
+            .container {
+                max-width: 1200px;
+            }
+            h1, h2, h3, h4, h5, h6 {
+                font-size: 1.2em;
+            }
+            .form-control {
+                font-size: 1rem;
+                padding: 0.75rem;
+            }
+            .btn {
+                font-size: 1rem;
+                padding: 0.75rem 1.5rem;
+            }
+        }
+        
+        /* 移动端样式 */
+        @media (max-width: 767px) {
+            h1, h2, h3, h4, h5, h6 {
+                font-size: 1em;
+            }
+            .form-control {
+                font-size: 16px; /* 防止iOS缩放 */
+                padding: 0.5rem;
+            }
+            .btn {
+                font-size: 1rem;
+                padding: 0.5rem 1rem;
+            }
+        }
+    </style>
+</head>
+<body class="bg-dark text-light">
+    <!-- 加载动画覆盖层 -->
+    <div id="loading-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); z-index: 9999; display: none; justify-content: center; align-items: center; flex-direction: column;">
+        <img src="{{ url_for('static', filename='media/loading.gif') }}" alt="加载中" style="max-width: 400px; cursor: pointer;" id="loading-image">
+    </div>
+
+    <div class="container py-5">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>文案生成</h2>
+            <a href="javascript:window.history.back();" class="btn btn-outline-secondary">返回</a>
+        </div>
+        <div class="card bg-dark text-light">
+            <div class="card-body">
+                <form id="textForm">
+                    <div class="mb-3">
+                        <label for="prompt" class="form-label">输入需求</label>
+                        <textarea class="form-control bg-dark text-light" id="prompt" rows="3" required></textarea>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-primary flex-grow-1" onclick="generateText('etymology')">词源典故查找</button>
+                        <button type="button" class="btn btn-success flex-grow-1" onclick="generateText('title')">公众号标题生成</button>
+                        <button type="button" class="btn btn-info flex-grow-1" onclick="generateText('article')">公众号文章生成</button>
+                    </div>
+                </form>
+                <div id="result" class="mt-4" style="display: none;">
+                    <h3>生成结果</h3>
+                    <div class="card bg-dark text-light">
+                        <div class="card-body">
+                            <p id="generatedText"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+    <script>
+        // 声明变量
+        let isGenerating = false;
+        let abortController = null;
+        
+        // 显示加载动画
+        function showLoading() {
+            const overlay = document.getElementById('loading-overlay');
+            overlay.style.display = 'flex';
+        }
+        
+        // 隐藏加载动画
+        function hideLoading() {
+            const overlay = document.getElementById('loading-overlay');
+            overlay.style.display = 'none';
+        }
+        
+        // 设置中止功能
+        document.addEventListener('DOMContentLoaded', function() {
+            // 为加载图像添加点击事件
+            document.getElementById('loading-image').addEventListener('click', function() {
+                if (confirm('是否中止生成？')) {
+                    if (abortController) {
+                        abortController.abort();
+                        hideLoading();
+                    }
+                }
+            });
+        });
+
+        async function generateText(type) {
+            if (isGenerating) {
+                alert('生成中，请等待');
+                return;
+            }
+
+            const prompt = document.getElementById('prompt').value;
+            if (!prompt) {
+                alert('请输入需求');
+                return;
+            }
+
+            isGenerating = true;
+            abortController = new AbortController();
+
+            try {
+                showLoading();
+
+                const response = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        field_name: type,
+                        optimize: '',
+                        prompt: prompt
+                    }),
+                    signal: abortController.signal
+                });
+
+                const data = await response.json();
+                
+                if (data.success && data.status === 'generating_completed') {
+                    document.getElementById('result').style.display = 'block';
+                    document.getElementById('generatedText').textContent = data.content;
+                } else {
+                    alert(data.message || '生成失败');
+                }
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    console.log('生成已取消');
+                } else {
+                    console.error('生成过程出错:', error);
+                    alert('生成失败，请稍后重试');
+                }
+            } finally {
+                isGenerating = false;
+                abortController = null;
+                hideLoading();
+            }
+        }
+    </script>
+</body>
+</html> 

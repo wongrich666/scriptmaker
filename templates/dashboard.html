@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+	<title>仪表板 - 剧本管理系统</title>
+	<link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+	<link rel="stylesheet" href="{{ url_for('static', filename='bootstrap.min.css') }}">
+	<link rel="stylesheet" href="{{ url_for('static', filename='dark-theme.css') }}">
+	<link rel="stylesheet" href="{{ url_for('static', filename='fix-font-size.css') }}">
+	<style>
+		/* 强制覆盖字体大小 - 使用!important确保优先级 */
+		/* PC端样式优化 */
+		@media (min-width: 768px) {
+			.container {
+				max-width: 1200px !important;
+			}
+
+			h1,
+			h2,
+			h3,
+			h4,
+			h5,
+			h6 {
+				font-size: 1.5rem !important;
+				line-height: 1.4 !important;
+			}
+
+			h1 {
+				font-size: 2rem !important;
+			}
+
+			h2 {
+				font-size: 1.75rem !important;
+			}
+
+			h3 {
+				font-size: 1.5rem !important;
+			}
+
+			.form-control {
+				font-size: 1rem !important;
+				padding: 0.5rem !important;
+			}
+
+			.btn {
+				font-size: 1rem !important;
+				padding: 0.5rem 1rem !important;
+			}
+
+			.btn-lg {
+				font-size: 1.1rem !important;
+				padding: 0.75rem 1.5rem !important;
+			}
+
+			.navbar-brand {
+				font-size: 1.25rem !important;
+			}
+
+			.nav-link {
+				font-size: 1rem !important;
+			}
+
+			.card-title {
+				font-size: 1.25rem !important;
+			}
+
+			.card-text {
+				font-size: 1rem !important;
+			}
+
+			.table {
+				font-size: 0.9rem !important;
+			}
+
+			.alert {
+				font-size: 1rem !important;
+			}
+		}
+
+		/* 移动端样式 */
+		@media (max-width: 767px) {
+
+			h1,
+			h2,
+			h3,
+			h4,
+			h5,
+			h6 {
+				font-size: 1.2rem !important;
+			}
+
+			h1 {
+				font-size: 1.5rem !important;
+			}
+
+			h2 {
+				font-size: 1.3rem !important;
+			}
+
+			.form-control {
+				font-size: 16px !important;
+				/* 防止iOS缩放 */
+				padding: 0.5rem !important;
+			}
+
+			.btn {
+				font-size: 1rem !important;
+				padding: 0.5rem 1rem !important;
+			}
+		}
+
+		/* 全局字体大小控制 */
+		body {
+			font-size: 1rem !important;
+			line-height: 1.6 !important;
+		}
+
+		/* 覆盖Bootstrap默认样式 */
+		.display-1,
+		.display-2,
+		.display-3,
+		.display-4,
+		.display-5,
+		.display-6 {
+			font-size: 1.5rem !important;
+		}
+
+		.lead {
+			font-size: 1.1rem !important;
+		}
+
+		.small {
+			font-size: 0.875rem !important;
+		}
+
+		/* 确保所有文本元素都有合理的大小 */
+		p,
+		div,
+		span,
+		label,
+		input,
+		textarea,
+		select {
+			font-size: 1rem !important;
+		}
+	</style>
+</head>
+
+<body class="bg-dark text-light">
+	<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+		<div class="container">
+			<a class="navbar-brand" href="#">
+				<img src="{{ url_for('static', filename='icon.png') }}" alt="系统图标" height="30"
+					class="d-inline-block align-text-top me-2">
+				剧本管理系统
+			</a>
+			<button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+				<span class="navbar-toggler-icon"></span>
+			</button>
+			<div class="collapse navbar-collapse" id="navbarNav">
+				<ul class="navbar-nav ms-auto">
+					<li class="nav-item">
+						<span class="nav-link">{{ email }}</span>
+					</li>
+					<li class="nav-item">
+						<a class="nav-link" href="{{ url_for('auth.logout') }}">退出</a>
+					</li>
+				</ul>
+			</div>
+		</div>
+	</nav>
+
+	<div class="container py-5">
+		{% with messages = get_flashed_messages() %}
+		{% if messages %}
+		{% for message in messages %}
+		<div class="alert alert-success">{{ message }}</div>
+		{% endfor %}
+		{% endif %}
+		{% endwith %}
+
+		<div class="d-flex justify-content-between align-items-center mb-4">
+			<h2>我的剧本</h2>
+			<a href="{{ url_for('dashboard.new_script') }}" class="btn btn-primary">新建剧本</a>
+			<a href="javascript:window.history.back();" class="btn btn-outline-secondary">返回</a>
+		</div>
+
+		{% if scripts.items %}
+		<div class="table-responsive">
+			<table class="table table-dark table-hover">
+				<thead>
+					<tr class="text-light">
+						<th>标题</th>
+						<th>创建时间</th>
+						<th>更新时间</th>
+						<th>操作</th>
+					</tr>
+				</thead>
+				<tbody class="text-light">
+					{% for script in scripts.items %}
+					<tr>
+						<td>{{ script.title }}</td>
+						<td class="script-time" data-utc-time="{{ script.created_at }}">{{ (script.created_at +
+							timedelta(hours=8)).strftime('%Y-%m-%d %H:%M:%S') }}</td>
+						<td class="script-time" data-utc-time="{{ script.updated_at }}">{{ (script.updated_at +
+							timedelta(hours=8)).strftime('%Y-%m-%d %H:%M:%S') }}</td>
+						<td>
+							<a href="{{ url_for('dashboard.edit_script', script_id=script.id) }}"
+								class="btn btn-sm btn-outline-primary">编辑</a>
+							<form action="{{ url_for('dashboard.delete_script', script_id=script.id) }}" method="POST"
+								class="d-inline">
+								<button type="submit" class="btn btn-sm btn-outline-danger"
+									onclick="return confirm('确定要删除这个剧本吗？')">删除</button>
+							</form>
+						</td>
+					</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+
+		<nav aria-label="Page navigation" class="mt-4">
+			<ul class="pagination justify-content-center">
+				{% if scripts.has_prev %}
+				<li class="page-item">
+					<a class="page-link bg-dark text-light border-secondary"
+						href="{{ url_for('dashboard.index', page=scripts.prev_num) }}">上一页</a>
+				</li>
+				{% endif %}
+
+				{% for page in scripts.iter_pages() %}
+				{% if page %}
+				<li class="page-item {% if page == scripts.page %}active{% endif %}">
+					<a class="page-link bg-dark text-light border-secondary"
+						href="{{ url_for('dashboard.index', page=page) }}">{{ page }}</a>
+				</li>
+				{% else %}
+				<li class="page-item disabled"><span class="page-link bg-dark text-light border-secondary">...</span>
+				</li>
+				{% endif %}
+				{% endfor %}
+
+				{% if scripts.has_next %}
+				<li class="page-item">
+					<a class="page-link bg-dark text-light border-secondary"
+						href="{{ url_for('dashboard.index', page=scripts.next_num) }}">下一页</a>
+				</li>
+				{% endif %}
+			</ul>
+		</nav>
+		{% else %}
+		<div class="text-center py-5">
+			<p class="text-muted">您还没有创建任何剧本</p>
+			<a href="{{ url_for('dashboard.new_script') }}" class="btn btn-primary">创建第一个剧本</a>
+		</div>
+		{% endif %}
+	</div>
+
+	<script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+	<script>
+		// 获取用户时区偏移量（分钟）
+		const userTimezoneOffset = new Date().getTimezoneOffset();
+
+		// 转换时间显示
+		function convertTime(utcTimeStr) {
+			const date = new Date(utcTimeStr);
+			// 调整时区偏移
+			date.setMinutes(date.getMinutes() - userTimezoneOffset);
+			return date.toLocaleString('zh-CN', {
+				year: 'numeric',
+				month: '2-digit',
+				day: '2-digit',
+				hour: '2-digit',
+				minute: '2-digit',
+				second: '2-digit',
+				hour12: false
+			});
+		}
+
+		// 转换所有时间显示
+		document.addEventListener('DOMContentLoaded', function () {
+			const timeElements = document.querySelectorAll('.script-time');
+			timeElements.forEach(element => {
+				const utcTime = element.getAttribute('data-utc-time');
+				if (utcTime) {
+					element.textContent = convertTime(utcTime);
+				}
+			});
+		});
+	</script>
+</body>
+
+</html>

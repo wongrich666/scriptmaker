@@ -1,0 +1,225 @@
+/* 强制修复字体大小问题 - 使用!important确保优先级 */
+
+/* PC端样式优化 */
+@media (min-width: 768px) {
+	.container {
+		max-width: 1200px !important;
+	}
+
+	/* 标题字体大小控制 */
+	h1,
+	h2,
+	h3,
+	h4,
+	h5,
+	h6 {
+		font-size: 1.5rem !important;
+		line-height: 1.4 !important;
+		margin-bottom: 0.5rem !important;
+	}
+
+	h1 {
+		font-size: 2rem !important;
+	}
+
+	h2 {
+		font-size: 1.75rem !important;
+	}
+
+	h3 {
+		font-size: 1.5rem !important;
+	}
+
+	h4 {
+		font-size: 1.25rem !important;
+	}
+
+	h5,
+	h6 {
+		font-size: 1.1rem !important;
+	}
+
+	/* 表单元素 */
+	.form-control,
+	.form-select {
+		font-size: 1rem !important;
+		padding: 0.5rem !important;
+		height: auto !important;
+	}
+
+	/* 按钮 */
+	.btn {
+		font-size: 1rem !important;
+		padding: 0.5rem 1rem !important;
+	}
+
+	.btn-lg {
+		font-size: 1.1rem !important;
+		padding: 0.75rem 1.5rem !important;
+	}
+
+	.btn-sm {
+		font-size: 0.875rem !important;
+		padding: 0.25rem 0.5rem !important;
+	}
+
+	/* 导航栏 */
+	.navbar-brand {
+		font-size: 1.25rem !important;
+	}
+
+	.nav-link {
+		font-size: 1rem !important;
+	}
+
+	/* 卡片 */
+	.card-title {
+		font-size: 1.25rem !important;
+	}
+
+	.card-text {
+		font-size: 1rem !important;
+	}
+
+	/* 表格 */
+	.table {
+		font-size: 0.9rem !important;
+	}
+
+	.table th,
+	.table td {
+		font-size: 0.9rem !important;
+		padding: 0.5rem !important;
+	}
+
+	/* 警告框 */
+	.alert {
+		font-size: 1rem !important;
+	}
+
+	/* 标签页 */
+	.nav-tabs .nav-link {
+		font-size: 1rem !important;
+		padding: 0.5rem 1rem !important;
+	}
+
+	/* 分页 */
+	.pagination .page-link {
+		font-size: 1rem !important;
+		padding: 0.5rem 0.75rem !important;
+	}
+
+	/* 模态框 */
+	.modal-title {
+		font-size: 1.25rem !important;
+	}
+
+	.modal-body {
+		font-size: 1rem !important;
+	}
+}
+
+/* 移动端样式 */
+@media (max-width: 767px) {
+
+	h1,
+	h2,
+	h3,
+	h4,
+	h5,
+	h6 {
+		font-size: 1.2rem !important;
+	}
+
+	h1 {
+		font-size: 1.5rem !important;
+	}
+
+	h2 {
+		font-size: 1.3rem !important;
+	}
+
+	.form-control,
+	.form-select {
+		font-size: 16px !important;
+		/* 防止iOS缩放 */
+		padding: 0.5rem !important;
+	}
+
+	.btn {
+		font-size: 1rem !important;
+		padding: 0.5rem 1rem !important;
+	}
+}
+
+/* 全局字体大小控制 */
+body {
+	font-size: 1rem !important;
+	line-height: 1.6 !important;
+}
+
+/* 覆盖Bootstrap默认样式 */
+.display-1,
+.display-2,
+.display-3,
+.display-4,
+.display-5,
+.display-6 {
+	font-size: 1.5rem !important;
+}
+
+.lead {
+	font-size: 1.1rem !important;
+}
+
+.small {
+	font-size: 0.875rem !important;
+}
+
+/* 确保所有文本元素都有合理的大小 */
+p,
+div,
+span,
+label,
+input,
+textarea,
+select,
+a {
+	font-size: 1rem !important;
+}
+
+/* 特殊元素覆盖 */
+.badge {
+	font-size: 0.75rem !important;
+}
+
+.tooltip {
+	font-size: 0.875rem !important;
+}
+
+.popover {
+	font-size: 0.875rem !important;
+}
+
+/* 强制覆盖可能的Bootstrap类 */
+.text-nowrap,
+.text-break,
+.text-truncate {
+	font-size: 1rem !important;
+}
+
+/* 确保列表项字体大小 */
+.list-group-item {
+	font-size: 1rem !important;
+}
+
+/* 覆盖可能的自定义样式 */
+.custom-control-label {
+	font-size: 1rem !important;
+}
+
+/* 确保所有表单标签大小一致 */
+.form-label,
+.col-form-label {
+	font-size: 1rem !important;
+}

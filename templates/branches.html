@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>分支管理</title>
+    <!-- 引入Treant和Raphael样式和脚本 -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='Treant.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='bootstrap.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='dark-theme.css') }}">
+
+    <style>
+        body {
+            background-color: #252525;
+            color: white;
+            font-family: Arial, sans-serif;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        
+        #tree-container {
+            width: 100%;
+            height: calc(100vh - 80px);
+            border: 1px solid #444;
+            margin: 10px 0;
+            padding: 10px;
+            box-sizing: border-box;
+            position: relative;
+            overflow: hidden;
+            cursor: grab;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        #tree-simple {
+            position: absolute;
+            transform-origin: center center;
+            transition: transform 0.05s ease-out;
+            min-width: 100%;
+            min-height: 100%;
+        }
+        
+        #tree-container.dragging {
+            cursor: grabbing !important;
+        }
+        
+        .node {
+            padding: 15px 20px;
+            border-radius: 5px;
+            background-color: #007bff;
+            color: #ffffff;
+            border: 1px solid rgba(255,255,255,0.3);
+            box-shadow: 0 3px 7px rgba(0,0,0,0.4);
+            font-size: 16px;
+            min-width: 200px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .node p {
+            margin: 0;
+            padding: 0;
+            font-size: 16px;
+            font-weight: bold;
+            color: #ffffff;
+        }
+        
+        .node.root {
+            background-color: #17a2b8;
+        }
+        
+        .node.selected {
+            background-color: #ffc107;
+            color: #000000;
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
+            transform: scale(1.05);
+        }
+        
+        .node.selected p {
+            color: #000000;
+        }
+        
+        /* 按钮样式 */
+        .button-container {
+            margin: 10px;
+            text-align: center;
+            height: 60px;
+            box-sizing: border-box;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            margin: 0 10px;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        .btn-add {
+            background-color: #28a745;
+        }
+        
+        .btn-edit {
+            background-color: #ffc107;
+        }
+        
+        .btn-edit:hover {
+            background-color: #e0a800;
+        }
+
+        .btn-add:hover {
+            background-color: #218838;
+        }
+        
+        .btn-delete {
+            background-color: #dc3545;
+        }
+        
+        .btn-delete:hover {
+            background-color: #c82333;
+        }
+        
+        .btn-save {
+            background-color: #007bff;
+        }
+        
+        .btn-save:hover {
+            background-color: #0069d9;
+        }
+        
+        .btn-back {
+            background-color: #6c757d;
+        }
+        
+        .btn-back:hover {
+            background-color: #5a6268;
+        }
+        
+        .btn:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+    </style>
+</head>
+<body class="bg-dark text-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <img src="{{ url_for('static', filename='icon.png') }}" alt="系统图标" height="30" class="d-inline-block align-text-top me-2">
+                剧本管理系统
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <span class="nav-link">{{ current_user.email }}</span>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('auth.logout') }}">退出</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container py-5">
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-danger">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>分支管理</h2>
+        </div>
+
+    <!-- 按钮容器 -->
+    <div class="button-container">
+        <button id="btn-add" class="btn btn-add">添加节点</button>
+        <button id="btn-delete" class="btn btn-delete">删除节点</button>
+        <button id="btn-edit" class="btn btn-edit">编辑</button>
+        <button id="btn-back" class="btn btn-back">返回</button>
+    </div>
+    
+    <div id="tree-container">
+        <div id="tree-simple"></div>
+    </div>
+    
+    <!-- 引入jQuery (Treant需要) -->
+    <script src="{{ url_for('static', filename='js/jquery-3.6.0.min.js') }}"></script>
+    <!-- 引入Raphael (Treant需要) -->
+    <script src="{{ url_for('static', filename='js/raphael.min.js') }}"></script>
+    <!-- 引入Treant -->
+    <script src="{{ url_for('static', filename='js/Treant.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+    
+    <script>
+        // 全局变量，存储当前选中的节点
+        var selectedNode = null;
+        var chart = null;
+        var scriptId = {% if script.id %}{{ script.id }}{% else %}0{% endif %};
+
+        // 获取章节数据
+        var chaptersData = {{ chapters_json|safe }};
+        var nodeCount = chaptersData.length;
+        var formattedData = formatChapters(chaptersData);
+        
+        // 拖动和缩放相关变量
+        var isDragging = false;
+        var lastX, lastY;
+        var translateX = 0;
+        var translateY = 0;
+        var scale = 0.8;
+        var minScale = 0.2;
+        var maxScale = 2.0;
+        
+        // 树结构配置
+        var simple_chart_config = {
+            chart: {
+                container: "#tree-simple",
+                rootOrientation: "NORTH",  // 垂直向下布局
+                levelSeparation: 20,      // 节点垂直间距
+                siblingSeparation: 70,     // 兄弟节点水平间距
+                nodeAlign: "CENTER",       // 居中对齐
+                connectors: {
+                    type: "straight",      // 直线连接器
+                    style: {
+                        "stroke-width": 3, // 连接线宽度
+                        "stroke": "#aaa"   // 连接线颜色
+                    }
+                },
+                node: {
+                    HTMLclass: "node"
+                }
+            },
+            
+            // 定义节点结构
+            nodeStructure: formattedData
+        };
+
+        // 格式化章节数据
+        function formatChapters(chapters) {
+            var rootNodes = [];
+            var nodeMap = new Map();
+
+            // 首先创建所有节点
+            var i=1;
+            chapters.forEach(function(chapter) {
+                nodeMap.set(chapter.id, {
+                    id: i,
+                    chapterid: chapter.id,
+                    text: { name: chapter.id + ". " + chapter.title },
+                    children: []
+                });
+                i++;
+            });
+
+            // 构建树结构
+            chapters.forEach(function(chapter) {
+                var node = nodeMap.get(chapter.id);
+                if (chapter.previous_id === null && chapter.number > 1) {
+                    // 找到前一个章节作为父节点
+                    var parentChapter = chapters.find(function(c) { return c.number === chapter.number - 1; });
+                    if (parentChapter) {
+                        var parentNode = nodeMap.get(parentChapter.id);
+                        parentNode.children.push(node);
+                    } else {
+                        rootNodes.push(node);
+                    }
+                } else {
+                    rootNodes.push(node);
+                }
+            });
+
+            return rootNodes[0];
+        }
+
+        // 根据节点id查找chapterid
+        function findChapterId(nodeId, data) {
+            if (data.id == nodeId) {
+                return data;
+            }
+            if (data.children) {
+                for (var i = 0; i < data.children.length; i++) {
+                    var result = findChapterId(nodeId, data.children[i]);
+                    if (result) {
+                        return result;
+                    }
+                }
+            }
+            return null;
+        }
+        
+        // 初始化时禁用按钮
+        $('#btn-add, #btn-delete, #btn-edit').prop('disabled', true);
+
+        // 在重新初始化树后重新绑定事件
+        function rebindEvents() {
+            // 重新绑定点击事件
+            $('.node').click(function() {
+                $('.node').removeClass('selected');
+                $(this).addClass('selected');
+                // 获取并显示选定节点的chapterid
+                var thisnode = $(this);
+                selectedNode = chart.tree.nodeDB.db.find(function(node) {
+                    return node.nodeDOM === thisnode.get(0);
+                });
+                console.log('selectedNode:', selectedNode.id);
+                $('#btn-add, #btn-delete, #btn-edit').prop('disabled', false);
+            });
+        }
+
+        // 修改initTree函数
+        function initTree() {
+            chart = new Treant(simple_chart_config);
+            
+            // 设置初始位置和缩放
+            translateX = 0;
+            translateY = 0;
+            $('#tree-simple').css('transform', `translate(${translateX}px, ${translateY}px) scale(${scale})`);
+            
+            // 重新绑定事件
+            rebindEvents();
+            
+            // 初始时禁用按钮
+            $('#btn-add, #btn-delete, #btn-edit').prop('disabled', true);
+
+            // 添加拖动事件
+            $(document).on('mousedown', '#tree-container, .node', function(e) {
+                e.preventDefault();
+                isDragging = true;
+                lastX = e.clientX;
+                lastY = e.clientY;
+                $('#tree-container').addClass('dragging');
+            });
+            
+            $(document).on('mousemove', function(e) {
+                if (isDragging) {
+                    e.preventDefault();
+                    var dx = e.clientX - lastX;
+                    var dy = e.clientY - lastY;
+                    translateX += dx;
+                    translateY += dy;
+                    $('#tree-simple').css('transform', `translate(${translateX}px, ${translateY}px) scale(${scale})`);
+                    lastX = e.clientX;
+                    lastY = e.clientY;
+                }
+            });
+            
+            $(document).on('mouseup', function() {
+                isDragging = false;
+                $('#tree-container').removeClass('dragging');
+            });
+            
+            // 添加缩放事件
+            $('#tree-container').on('wheel', function(e) {
+                e.preventDefault();
+                var delta = e.originalEvent.deltaY;
+                var newScale = scale + (delta > 0 ? -0.1 : 0.1);
+                newScale = Math.max(minScale, Math.min(maxScale, newScale));
+                scale = newScale;
+                $('#tree-simple').css('transform', `translate(${translateX}px, ${translateY}px) scale(${scale})`);
+            });
+        }
+        
+        // 页面加载完成后初始化
+        $(document).ready(function() {
+            initTree();
+            
+            // 添加节点按钮点击事件
+            $('#btn-add').click(function() {
+                if (selectedNode) {
+                    // 弹出输入框
+                    var nodeName = prompt('请输入分支名称:', '新分支');
+                    if (nodeName === null) {
+                        return; // 用户点击取消
+                    }
+
+                    // 更新节点计数
+                    nodeCount++;
+                    // 创建新节点
+                    var newNode = {
+                        id: nodeCount,
+                        text: { name: nodeCount+". "+nodeName },
+                        children: []
+                    };
+                    
+                    // 如果是根节点
+                    if (!selectedNode.parent) {
+                        if (!formattedData.children) {
+                            formattedData.children = [];
+                        }
+                        formattedData.children.push(newNode);
+                    } else {
+                        // 在树结构中查找节点并添加子节点
+                        var node = findChapterId(selectedNode.id, formattedData);
+                        console.log('node:', node,selectedNode.id);
+                        if (!node.children) {
+                            node.children = [];
+                        }
+                        node.children.push(newNode);
+                    }
+                    
+                    // 清除现有的树
+                    $('#tree-simple').empty();
+                    
+                    // 重新初始化树
+                    chart = new Treant(simple_chart_config);
+                    
+                    // 重新绑定事件
+                    rebindEvents();
+                    
+                    // 重新设置位置和缩放
+                    $('#tree-simple').css('transform', `translate(${translateX}px, ${translateY}px) scale(${scale})`);
+                    
+                    // 清除选中状态和禁用按钮
+                    selectedNode = null;
+                    $('#btn-add, #btn-delete, #btn-edit').prop('disabled', true);
+                }
+            });
+            
+            // 删除节点按钮点击事件
+            $('#btn-delete').click(function() {
+                if (selectedNode) {
+
+                    // 显示确认对话框
+                    if (confirm('确定要删除分支 "' + selectedNode.text.name + '" 吗？\n注意：删除后将无法恢复，其下所有子分支也会被删除。')) {
+                        
+                        // 如果是根节点，不允许删除
+                        if (!selectedNode.parent) {
+                            alert('根节点不能删除！');
+                            return;
+                        }else{
+                            var node = findChapterId(selectedNode.id, formattedData);
+                            console.log('node:', node,selectedNode.id);
+                            node.children.splice(i, 1);                            
+                        }
+                                                
+                        // 清除现有的树
+                        $('#tree-simple').empty();
+                        
+                        // 重新初始化树
+                        chart = new Treant(simple_chart_config);
+                        
+                        // 重新绑定事件
+                        rebindEvents();
+                        
+                        // 重新设置位置和缩放
+                        $('#tree-simple').css('transform', `translate(${translateX}px, ${translateY}px) scale(${scale})`);
+                        
+                        // 清除选中状态
+                        selectedNode = null;
+                        // 禁用按钮
+                        $('#btn-add, #btn-delete, #btn-edit').prop('disabled', true);
+                    }
+                }
+            });
+            
+            // 编辑节点按钮点击事件
+            $('#btn-edit').click(function() {
+                if (selectedNode) {
+                    var chapterid = findChapterId(selectedNode.id, formattedData).chapterid;
+                    window.location.href = `/chapters/chapters/${chapterid}/edit`;
+                } else {
+                    alert('请先选择一个节点');
+                }
+            });
+            
+            // 返回按钮点击事件
+            $('#btn-back').click(function() {
+                window.history.back();
+                return false;
+            });
+        });
+        
+    </script>
+</body>
+</html> 

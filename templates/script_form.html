@@ -1,0 +1,2204 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+	<title>{% if script %}编辑剧本{% else %}新建剧本{% endif %} - 剧本管理系统</title>
+	<link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+	<link rel="stylesheet" href="{{ url_for('static', filename='bootstrap.min.css') }}">
+	<link rel="stylesheet" href="{{ url_for('static', filename='dark-theme.css') }}">
+	<link rel="stylesheet" href="{{ url_for('static', filename='jsmind.css') }}">
+
+	<style>
+		/* PC端样式优化 */
+		@media (min-width: 768px) {
+			.container {
+				max-width: 1200px;
+			}
+
+			h1,
+			h2,
+			h3,
+			h4,
+			h5,
+			h6 {
+				font-size: 1.2em;
+			}
+
+			.form-control {
+				font-size: 1rem;
+				padding: 0.75rem;
+			}
+
+			.btn {
+				font-size: 1rem;
+				padding: 0.75rem 1.5rem;
+			}
+		}
+
+		/* 移动端样式 */
+		@media (max-width: 767px) {
+
+			h1,
+			h2,
+			h3,
+			h4,
+			h5,
+			h6 {
+				font-size: 1em;
+			}
+
+			.form-control {
+				font-size: 16px;
+				/* 防止iOS缩放 */
+				padding: 0.5rem;
+			}
+
+			.btn {
+				font-size: 1rem;
+				padding: 0.5rem 1rem;
+			}
+		}
+	</style>
+</head>
+
+<body class="bg-dark text-light">
+	<!-- 加载动画覆盖层 -->
+	<div id="loading-overlay"
+		style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); z-index: 9999; display: none; justify-content: center; align-items: center; flex-direction: column;">
+		<img src="{{ url_for('static', filename='media/loading.gif') }}" alt="加载中"
+			style="max-width: 400px; cursor: pointer;" id="loading-image">
+	</div>
+
+	<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+		<div class="container">
+			<a class="navbar-brand" href="#">
+				<img src="{{ url_for('static', filename='icon.png') }}" alt="系统图标" height="30"
+					class="d-inline-block align-text-top me-2">
+				剧本管理系统
+			</a>
+			<button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+				<span class="navbar-toggler-icon"></span>
+			</button>
+			<div class="collapse navbar-collapse" id="navbarNav">
+				<ul class="navbar-nav ms-auto align-items-center">
+					<li class="nav-item me-3">
+						<label for="model-select" class="text-light me-2 mb-0">大模型:</label>
+						<select class="form-select form-select-sm d-inline-block bg-dark text-light border-secondary"
+							id="model-select" style="width: auto; display: inline-block;"
+							onchange="switchModel(this.value)">
+							<option value="deepseek">Deepseek</option>
+							<option value="gemini">Gemini</option>
+						</select>
+					</li>
+					<li class="nav-item">
+						<span class="nav-link">{{ current_user.email }}</span>
+					</li>
+					<li class="nav-item">
+						<a class="nav-link" href="{{ url_for('auth.logout') }}">退出</a>
+					</li>
+				</ul>
+			</div>
+		</div>
+	</nav>
+
+	<div class="container py-5">
+		{% with messages = get_flashed_messages() %}
+		{% if messages %}
+		{% for message in messages %}
+		<div class="alert alert-danger">{{ message }}</div>
+		{% endfor %}
+		{% endif %}
+		{% endwith %}
+
+		<div class="d-flex justify-content-between align-items-center mb-4">
+			<h2>{% if script %}编辑剧本{% else %}新建剧本{% endif %}</h2>
+			<a href="{{ url_for('dashboard.index') }}" class="btn btn-outline-secondary">返回</a>
+		</div>
+
+		<div class="card bg-dark border-light">
+			<div class="card-body">
+				<div class="row">
+					<div class="col-md-3">
+						<ul class="nav nav-pills flex-column mb-4" id="scriptTabs" role="tablist">
+							<li class="nav-item" role="presentation">
+								<button class="nav-link text-light active w-100 text-start mb-2" id="basic-tab"
+									data-bs-toggle="tab" data-bs-target="#basic" type="button" role="tab">基本信息</button>
+							</li>
+							{% if script %}
+							<li class="nav-item" role="presentation">
+								<button class="nav-link text-light w-100 text-start mb-2" id="knowledge-panel-tab"
+									data-bs-toggle="tab" data-bs-target="#knowledge-panel" type="button"
+									role="tab">知识库与写作风格</button>
+							</li>
+							<li class="nav-item" role="presentation">
+								<button class="nav-link text-light w-100 text-start mb-2" id="characters-tab"
+									data-bs-toggle="tab" data-bs-target="#characters" type="button"
+									role="tab">角色设定</button>
+							</li>
+							<li class="nav-item" role="presentation">
+								<button class="nav-link text-light w-100 text-start mb-2" id="outline-panel-tab"
+									data-bs-toggle="tab" data-bs-target="#outline-panel" type="button"
+									role="tab">故事大纲</button>
+							</li>
+							<li class="nav-item" role="presentation">
+								<button class="nav-link text-light w-100 text-start mb-2" id="chapters-tab"
+									data-bs-toggle="tab" data-bs-target="#chapters" type="button"
+									role="tab">章节管理</button>
+							</li>
+							<li class="nav-item" role="presentation">
+								<button class="nav-link text-light w-100 text-start mb-2" id="export-tab"
+									data-bs-toggle="tab" data-bs-target="#export" type="button" role="tab">导出</button>
+							</li>
+							{% endif %}
+						</ul>
+					</div>
+					<div class="col-md-9">
+						<div class="tab-content" id="scriptTabContent">
+							<!-- 基本信息 -->
+							<div class="tab-pane fade show active" id="basic" role="tabpanel">
+								<div class="mb-3">
+									<label for="title" class="form-label">标题</label>
+									<input type="text" class="form-control bg-dark text-light" id="title" name="title"
+										value="{{ script.title if script else '' }}" required>
+								</div>
+								<div class="row">
+									<div class="col-md-3">
+										<div class="mb-3">
+											<label for="word_count" class="form-label">字数(万字)</label>
+											<input type="number" class="form-control bg-dark text-light" id="word_count"
+												name="word_count" min="0"
+												value="{{ script.word_count if script else '' }}" required>
+										</div>
+									</div>
+									<div class="col-md-3">
+										<div class="mb-3">
+											<label for="style_type" class="form-label">短片风格</label>
+											<select class="form-select bg-dark text-light" id="style_type"
+												name="style_type" required>
+												<option value="2d_realistic" {% if script and
+													script.style_type=='2d_realistic' %}selected{% else %}selected{%
+													endif %}>2D写实</option>
+												<option value="2d_cartoon" {% if script and
+													script.style_type=='2d_cartoon' %}selected{% endif %}>2D卡通</option>
+												<option value="3d_realistic" {% if script and
+													script.style_type=='3d_realistic' %}selected{% endif %}>3D写实
+												</option>
+												<option value="3d_cartoon" {% if script and
+													script.style_type=='3d_cartoon' %}selected{% endif %}>3D卡通</option>
+											</select>
+										</div>
+									</div>
+									<div class="col-md-3">
+										<div class="mb-3">
+											<label for="write_style" class="form-label">模仿风格</label>
+											<select class="form-select bg-dark text-light" id="write_style"
+												name="write_style" required>
+												<option value="无" {% if script and script.write_style=='' %}selected{%
+													else %}selected{% endif %}>无</option>
+												<option value="天蚕土豆" {% if script and script.write_style=='天蚕土豆'
+													%}selected{% endif %}>天蚕土豆</option>
+												<option value="猫腻" {% if script and script.write_style=='猫腻'
+													%}selected{% endif %}>猫腻</option>
+												<option value="辰东" {% if script and script.write_style=='辰东'
+													%}selected{% endif %}>辰东</option>
+												<option value="烽火戏诸侯" {% if script and script.write_style=='烽火戏诸侯'
+													%}selected{% endif %}>烽火戏诸侯</option>
+												<option value="爱潜水的乌贼" {% if script and script.write_style=='爱潜水的乌贼'
+													%}selected{% endif %}>爱潜水的乌贼</option>
+											</select>
+										</div>
+									</div>
+									<div class="col-md-3">
+										<div class="mb-3">
+											<label for="genre" class="form-label">题材</label>
+											<select class="form-select bg-dark text-light" id="genre" name="genre"
+												required>
+												<option value="">请选择题材</option>
+												<option value="都市" {% if script and script.genre=='都市' %}selected{%
+													endif %}>都市</option>
+												<option value="玄幻" {% if script and script.genre=='玄幻' %}selected{%
+													endif %}>玄幻</option>
+												<option value="科幻" {% if script and script.genre=='科幻' %}selected{%
+													endif %}>科幻</option>
+												<option value="武侠" {% if script and script.genre=='武侠' %}selected{%
+													endif %}>武侠</option>
+												<option value="仙侠" {% if script and script.genre=='仙侠' %}selected{%
+													endif %}>仙侠</option>
+												<option value="历史" {% if script and script.genre=='历史' %}selected{%
+													endif %}>历史</option>
+												<option value="军事" {% if script and script.genre=='军事' %}selected{%
+													endif %}>军事</option>
+												<option value="悬疑" {% if script and script.genre=='悬疑' %}selected{%
+													endif %}>悬疑</option>
+												<option value="恐怖" {% if script and script.genre=='恐怖' %}selected{%
+													endif %}>恐怖</option>
+												<option value="其他" {% if script and script.genre=='其他' %}selected{%
+													endif %}>其他</option>
+											</select>
+										</div>
+									</div>
+									<div class="col-md-3">
+										<div class="mb-3">
+											<label for="has_branching" class="form-label">情节分支</label>
+											<select class="form-select bg-dark text-light" id="has_branching"
+												name="has_branching" required>
+												<option value="false" {% if script and script.has_branching==false
+													%}selected{% else %}selected{% endif %}>否</option>
+												<option value="true" {% if script and script.has_branching==true
+													%}selected{% endif %}>是</option>
+											</select>
+										</div>
+									</div>
+								</div>
+								<div class="mb-3">
+									<label for="content" class="form-label">内容</label>
+									<textarea class="form-control bg-dark text-light" id="content" name="content"
+										rows="4" required>{{ script.content if script else '' }}</textarea>
+								</div>
+								<div class="mb-3">
+									<div class="d-flex justify-content-between align-items-center mb-2">
+										<label for="background" class="form-label mb-0">背景设定</label>
+										{% if script %}
+										<div>
+											<button type="button" class="btn btn-sm btn-outline-primary me-1"
+												onclick="generate('background')">AI生成</button>
+											<button type="button" class="btn btn-sm btn-outline-success"
+												onclick="optimize('background')">AI优化</button>
+										</div>
+										{% endif %}
+									</div>
+									<textarea class="form-control bg-dark text-light" id="background" name="background"
+										rows="3" placeholder="- 故事发生的时代背景
+- 世界观设定
+- 重要的环境因素
+- 社会背景等关键信息">{{ script.background if script else '' }}</textarea>
+								</div>
+								{% if not script %}
+								<div class="d-flex justify-content-end mt-3">
+									<button type="button" class="btn btn-primary"
+										onclick="saveScript()">保存并进入编辑模式</button>
+								</div>
+								{% endif %}
+							</div>
+
+							{% if script %}
+							<!-- 知识库与写作风格 -->
+							<div class="tab-pane fade" id="knowledge-panel" role="tabpanel">
+								<div class="row mb-3">
+									<div class="col-md-6">
+										<div class="d-flex justify-content-between align-items-center mb-2">
+											<h5 class="mb-0">知识库</h5>
+											<div>
+												<button type="button" class="btn btn-sm btn-outline-primary me-1"
+													onclick="generate('knowledge')">AI生成</button>
+												<button type="button" class="btn btn-sm btn-outline-success"
+													onclick="optimize('knowledge')">AI优化</button>
+											</div>
+										</div>
+										<div style="height: calc(100vh - 380px);">
+											<textarea class="form-control bg-dark text-light h-100" id="knowledge"
+												name="knowledge" placeholder="- 相关知识
+- 专业术语
+- 历史背景
+- 科学原理
+- 文化背景">{{ script.knowledge if script else '' }}</textarea>
+										</div>
+									</div>
+									<div class="col-md-6">
+										<div class="d-flex justify-content-between align-items-center mb-2">
+											<h5 class="mb-0">写作风格</h5>
+											<div>
+												<button type="button" class="btn btn-sm btn-outline-primary me-1"
+													onclick="generate('style')">AI生成</button>
+												<button type="button" class="btn btn-sm btn-outline-success"
+													onclick="optimize('style')">AI优化</button>
+											</div>
+										</div>
+										<div style="height: calc(100vh - 380px);">
+											<textarea class="form-control bg-dark text-light h-100" id="style"
+												name="style" placeholder="- 叙述风格
+- 语言特点
+- 节奏感
+- 情感表达
+- 视觉描述">{{ script.style if script else '' }}</textarea>
+										</div>
+									</div>
+								</div>
+							</div>
+
+							<!-- 角色设定 -->
+							<div class="tab-pane fade" id="characters" role="tabpanel">
+								<div class="d-flex justify-content-between align-items-center mb-3">
+									<h5 class="mb-0">角色列表</h5>
+									<button type="button" class="btn btn-success"
+										onclick="generateCharacters()">自动生成</button>
+								</div>
+								<div class="table-responsive">
+									<table class="table table-dark">
+										<thead>
+											<tr class="text-light">
+												<th>角色名称</th>
+												<th>性别/物种</th>
+												<th>年龄</th>
+												<th>操作</th>
+											</tr>
+										</thead>
+										<tbody class="text-light">
+											{% if characters %}
+											{% for character in characters.items %}
+											<tr>
+												<td>{{ character.name }}</td>
+												<td>{{ character.gender }}</td>
+												<td>{{ character.age }}</td>
+												<td>
+													<button type="button" class="btn btn-sm btn-outline-primary"
+														onclick="editCharacter({{ character.id }})">编辑</button>
+													<button type="button" class="btn btn-sm btn-outline-danger"
+														onclick="deleteCharacter({{ character.id }}, {{ characters.page }})">删除</button>
+												</td>
+											</tr>
+											{% endfor %}
+											{% else %}
+											<tr>
+												<td colspan="5" class="text-center">暂无角色</td>
+											</tr>
+											{% endif %}
+										</tbody>
+									</table>
+								</div>
+
+								{% if characters %}
+								<nav aria-label="角色分页">
+									<ul class="pagination justify-content-center">
+										{% if characters.has_prev %}
+										<li class="page-item">
+											<a class="page-link bg-dark text-light"
+												href="{{ url_for('dashboard.edit_script', script_id=script.id, tab='characters', character_page=characters.prev_num) }}">上一页</a>
+										</li>
+										{% endif %}
+
+										{% for page in characters.iter_pages() %}
+										{% if page %}
+										<li class="page-item {% if page == characters.page %}active{% endif %}">
+											<a class="page-link bg-dark text-light"
+												href="{{ url_for('dashboard.edit_script', script_id=script.id, tab='characters', character_page=page) }}">{{
+												page }}</a>
+										</li>
+										{% else %}
+										<li class="page-item disabled"><span
+												class="page-link bg-dark text-light">...</span></li>
+										{% endif %}
+										{% endfor %}
+
+										{% if characters.has_next %}
+										<li class="page-item">
+											<a class="page-link bg-dark text-light"
+												href="{{ url_for('dashboard.edit_script', script_id=script.id, tab='characters', character_page=characters.next_num) }}">下一页</a>
+										</li>
+										{% endif %}
+									</ul>
+								</nav>
+								{% endif %}
+							</div>
+
+							<!-- 故事大纲 -->
+							<div class="tab-pane fade" id="outline-panel" role="tabpanel">
+								<div class="d-flex justify-content-between align-items-center mb-3">
+									<h5 class="mb-0">故事大纲</h5>
+									<div>
+										<button type="button" class="btn btn-outline-primary me-2"
+											onclick="generate('outline')">AI生成</button>
+										<button type="button" class="btn btn-outline-success me-2"
+											onclick="optimize('outline')">AI优化</button>
+										<button type="button" class="btn btn-primary"
+											onclick="save('outline')">保存</button>
+									</div>
+								</div>
+								<div class="mb-3" style="height: calc(100vh - 320px);">
+									<textarea class="form-control bg-dark text-light h-100" id="outline"
+										name="outline">{{ script.outline if script else '' }}</textarea>
+								</div>
+							</div>
+
+							<!-- 章节管理 -->
+							<div class="tab-pane fade" id="chapters" role="tabpanel">
+								<div class="d-flex justify-content-between align-items-center mb-3">
+									<h5 class="mb-0">章节列表</h5>
+									<div>
+										<button type="button" class="btn btn-success me-2"
+											onclick="generateChapters()">自动生成</button>
+										{% if script and script.has_branching %}
+										<button type="button" class="btn btn-info"
+											onclick="showBranches()">分支管理</button>
+										{% endif %}
+									</div>
+								</div>
+								<div class="table-responsive">
+									<table class="table table-dark">
+										<thead>
+											<tr class="text-light">
+												<th>章节号</th>
+												<th>标题</th>
+												<th>操作</th>
+											</tr>
+										</thead>
+										<tbody class="text-light">
+											{% if chapters %}
+											{% for chapter in chapters.items %}
+											<tr>
+												<td>{{ chapter.number }}</td>
+												<td>{{ chapter.title }}</td>
+												<td>
+													<button type="button" class="btn btn-sm btn-outline-primary"
+														onclick="editChapter({{ chapter.id }})">编辑</button>
+													<button type="button" class="btn btn-sm btn-outline-danger"
+														onclick="deleteChapter({{ chapter.id }})">删除</button>
+												</td>
+											</tr>
+											{% endfor %}
+											{% else %}
+											<tr>
+												<td colspan="4" class="text-center">暂无章节</td>
+											</tr>
+											{% endif %}
+										</tbody>
+									</table>
+								</div>
+
+								{% if chapters %}
+								<nav aria-label="章节分页">
+									<ul class="pagination justify-content-center">
+										{% if chapters.has_prev %}
+										<li class="page-item">
+											<a class="page-link bg-dark text-light border-secondary"
+												href="{{ url_for('chapters.script_chapters', script_id=script.id, page=chapters.prev_num) }}">上一页</a>
+										</li>
+										{% endif %}
+
+										{% for page in chapters.iter_pages() %}
+										{% if page %}
+										<li class="page-item {% if page == chapters.page %}active{% endif %}">
+											<a class="page-link bg-dark text-light border-secondary"
+												href="{{ url_for('chapters.script_chapters', script_id=script.id, page=page) }}">{{
+												page }}</a>
+										</li>
+										{% else %}
+										<li class="page-item disabled"><span
+												class="page-link bg-dark text-light border-secondary">...</span></li>
+										{% endif %}
+										{% endfor %}
+
+										{% if chapters.has_next %}
+										<li class="page-item">
+											<a class="page-link bg-dark text-light border-secondary"
+												href="{{ url_for('chapters.script_chapters', script_id=script.id, page=chapters.next_num) }}">下一页</a>
+										</li>
+										{% endif %}
+									</ul>
+								</nav>
+								{% endif %}
+							</div>
+
+							<!-- 导出选项 -->
+							<div class="tab-pane fade" id="export" role="tabpanel">
+								<div class="d-flex justify-content-between align-items-center mb-3">
+									<h5 class="mb-0">导出选项</h5>
+								</div>
+								<div class="row">
+									<div class="col-md-6">
+										<div class="card bg-dark border-light mb-3">
+											<div class="card-body text-center">
+												<h5 class="card-title">故事内容</h5>
+												<p class="card-text">导出完整的故事内容，包括所有章节</p>
+												<div class="d-flex gap-2 justify-content-center">
+													<button type="button" class="btn btn-warning"
+														onclick="validateAndExport('story')">内容验证</button>
+													<button type="button" class="btn btn-primary"
+														onclick="exportStory()">直接导出</button>
+												</div>
+											</div>
+										</div>
+									</div>
+									<div class="col-md-6">
+										<div class="card bg-dark border-light mb-3">
+											<div class="card-body text-center">
+												<h5 class="card-title">故事剧本</h5>
+												<p class="card-text">导出剧本格式，包括对话和场景说明</p>
+												<div class="d-flex gap-2 justify-content-center">
+													<button type="button" class="btn btn-warning"
+														onclick="validateAndExport('script')">内容验证</button>
+													<button type="button" class="btn btn-primary"
+														onclick="exportScript()">直接导出</button>
+												</div>
+											</div>
+										</div>
+									</div>
+								</div>
+								<!-- 验证结果展示区域 -->
+								<div id="validation-result" class="mt-4" style="display: none;">
+									<div class="card bg-dark border-light">
+										<div class="card-header d-flex justify-content-between align-items-center">
+											<h5 class="mb-0">验证结果</h5>
+											<button type="button" class="btn-close btn-close-white"
+												onclick="closeValidationResult()"></button>
+										</div>
+										<div class="card-body">
+											<div id="validation-content" class="text-light"
+												style="white-space: pre-wrap; max-height: 500px; overflow-y: auto;">
+											</div>
+											<div class="mt-3 text-center">
+												<button type="button" class="btn btn-success"
+													id="export-after-validation"
+													onclick="exportAfterValidation()">导出验证后的内容</button>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+							{% endif %}
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<script>
+		// 阻止浏览器加载 source map 文件
+		(function () {
+			// 拦截 fetch 请求
+			const originalFetch = window.fetch;
+			window.fetch = function (...args) {
+				if (args[0] && typeof args[0] === 'string' && args[0].endsWith('.map')) {
+					return Promise.reject(new Error('Source map disabled'));
+				}
+				return originalFetch.apply(this, args);
+			};
+
+			// 拦截 XMLHttpRequest
+			const originalOpen = XMLHttpRequest.prototype.open;
+			XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+				if (url && url.endsWith('.map')) {
+					throw new Error('Source map disabled');
+				}
+				return originalOpen.apply(this, [method, url, ...rest]);
+			};
+
+			// 阻止通过 link 和 script 标签加载 .map 文件
+			const observer = new MutationObserver(function (mutations) {
+				mutations.forEach(function (mutation) {
+					mutation.addedNodes.forEach(function (node) {
+						if (node.nodeType === 1) { // Element node
+							if (node.tagName === 'LINK' && node.href && node.href.endsWith('.map')) {
+								node.remove();
+							}
+							if (node.tagName === 'SCRIPT' && node.src && node.src.endsWith('.map')) {
+								node.remove();
+							}
+						}
+					});
+				});
+			});
+			observer.observe(document.head, { childList: true, subtree: true });
+		})();
+	</script>
+	<script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+	<script src="{{ url_for('static', filename='js/jsmind.js') }}"></script>
+	<script src="{{ url_for('static', filename='js/jsmind.draggable.js') }}"></script>
+	<script>
+		// 声明变量
+		let isGenerating = false;
+		let abortController = null;
+
+		// 显示加载动画
+		function showLoading() {
+			const overlay = document.getElementById('loading-overlay');
+			overlay.style.display = 'flex';
+		}
+
+		// 隐藏加载动画
+		function hideLoading() {
+			const overlay = document.getElementById('loading-overlay');
+			overlay.style.display = 'none';
+		}
+
+		// 设置中止功能
+		document.addEventListener('DOMContentLoaded', function () {
+			// 为加载图像添加点击事件
+			document.getElementById('loading-image').addEventListener('click', function () {
+				if (confirm('是否中止生成？')) {
+					if (abortController) {
+						abortController.abort();
+						hideLoading();
+					}
+				}
+			});
+		});
+
+		// 在jsMind库加载后，直接修补绘制线条的方法
+		(function patchJsMind() {
+			// 保存原始的绘制线条方法
+			var originalDrawLine = jsMind.view_provider.prototype.draw_line;
+
+			// 替换为新的方法
+			jsMind.view_provider.prototype.draw_line = function (pin, pout, offset, canvas_ctx) {
+				var ctx = canvas_ctx || this.canvas_ctx;
+				ctx.strokeStyle = this.opts.line_color;
+				ctx.lineWidth = this.opts.line_width;
+				ctx.lineCap = 'round';
+
+				// 修改点坐标，使连线从节点中心开始和结束
+				if (pin && pin._data && pin._data.node && pout && pout._data && pout._data.node) {
+					var node_in = pin._data.node;
+					var node_out = pout._data.node;
+
+					var node_in_view = node_in._data.view;
+					var node_out_view = node_out._data.view;
+
+					if (node_in_view && node_out_view) {
+						// 复制原始点以避免修改原始数据
+						var newPin = { x: pin.x, y: pin.y };
+						var newPout = { x: pout.x, y: pout.y };
+
+						// 计算中心点位置
+						if (node_out.direction === jsMind.direction.right) {
+							newPout.x = node_out_view.abs_x + node_out_view.width;
+						} else {
+							newPout.x = node_out_view.abs_x;
+						}
+						newPout.y = node_out_view.abs_y + node_out_view.height / 2;
+
+						if (node_in.direction === jsMind.direction.right) {
+							newPin.x = node_in_view.abs_x;
+						} else {
+							newPin.x = node_in_view.abs_x + node_in_view.width;
+						}
+						newPin.y = node_in_view.abs_y + node_in_view.height / 2;
+
+						// 使用修改后的坐标绘制贝塞尔曲线
+						jsMind.util.canvas.bezierto(
+							ctx,
+							newPin.x + offset.x,
+							newPin.y + offset.y,
+							newPout.x + offset.x,
+							newPout.y + offset.y
+						);
+
+						return; // 提前返回，不执行原始方法
+					}
+				}
+
+				// 如果无法应用修改，则使用原始方法
+				jsMind.util.canvas.bezierto(
+					ctx,
+					pin.x + offset.x,
+					pin.y + offset.y,
+					pout.x + offset.x,
+					pout.y + offset.y
+				);
+			};
+		})();
+
+		// 全局变量存储scriptId
+		{% if script %}
+		{% set script_id_value = script.id %}
+		let currentScriptId = {{ script_id_value }};
+		{% else %}
+		let currentScriptId = null;
+		{% endif %}
+
+		// 获取scriptId
+		function getScriptId() {
+			return currentScriptId;
+		}
+
+		// 自动创建剧本（新建页面时）
+		async function autoCreateScript() {
+			if (currentScriptId) {
+				return currentScriptId; // 如果已经有ID，直接返回
+			}
+
+			const formData = new FormData();
+			formData.append('title', document.getElementById('title').value || '新剧本');
+			formData.append('word_count', document.getElementById('word_count').value || '0');
+			formData.append('style_type', document.getElementById('style_type').value || '2d_realistic');
+			formData.append('write_style', document.getElementById('write_style').value || '无');
+			formData.append('genre', document.getElementById('genre').value || '');
+			formData.append('has_branching', document.getElementById('has_branching').value || 'false');
+			formData.append('content', document.getElementById('content').value || '');
+
+			const backgroundElement = document.getElementById('background');
+			if (backgroundElement) {
+				formData.append('background', backgroundElement.value);
+			}
+
+			const saveUrl = "{{ url_for('dashboard.new_script') }}";
+
+			try {
+				const response = await fetch(saveUrl, {
+					method: 'POST',
+					body: formData,
+					headers: {
+						'Accept': 'application/json',
+						'X-Requested-With': 'XMLHttpRequest'
+					}
+				});
+
+				if (!response.ok) {
+					const data = await response.json();
+					throw new Error(data.message || '创建失败');
+				}
+
+				const data = await response.json();
+				if (data.success && data.script_id) {
+					currentScriptId = data.script_id;
+					return currentScriptId;
+				} else {
+					throw new Error(data.message || '创建失败');
+				}
+			} catch (error) {
+				console.error('自动创建剧本失败:', error);
+				return null;
+			}
+		}
+
+		// Debounce函数
+		function debounce(func, wait) {
+			let timeout;
+			return function executedFunction(...args) {
+				const later = () => {
+					clearTimeout(timeout);
+					func(...args);
+				};
+				clearTimeout(timeout);
+				timeout = setTimeout(later, wait);
+			};
+		}
+
+		// 自动保存函数（静默保存，不显示提示）
+		async function autoSave(fieldName) {
+			let scriptId = getScriptId();
+
+			// 如果scriptId为null（新建页面），先自动创建剧本
+			if (!scriptId) {
+				scriptId = await autoCreateScript();
+				if (!scriptId) {
+					return; // 创建失败，跳过保存
+				}
+			}
+
+			const formData = new FormData();
+			let saveUrl;
+
+			// 基本信息字段通过edit_script端点保存
+			const basicFields = ['title', 'content', 'word_count', 'style_type', 'write_style', 'genre', 'has_branching', 'background'];
+			{% set edit_script_template_url = url_for('dashboard.edit_script', script_id = 0) %}
+			{% set update_field_template_url = url_for('dashboard.update_field', script_id = 0) %}
+			if (basicFields.includes(fieldName)) {
+				// 保存所有基本信息字段
+				formData.append('title', document.getElementById('title').value);
+				formData.append('word_count', document.getElementById('word_count').value);
+				formData.append('style_type', document.getElementById('style_type').value);
+				formData.append('write_style', document.getElementById('write_style').value);
+				formData.append('genre', document.getElementById('genre').value);
+				formData.append('has_branching', document.getElementById('has_branching').value);
+				formData.append('content', document.getElementById('content').value);
+				const backgroundElement = document.getElementById('background');
+				if (backgroundElement) {
+					formData.append('background', backgroundElement.value);
+				}
+				formData.append('active_tab', 'basic');
+				saveUrl = "{{ edit_script_template_url }}".replace('0', scriptId);
+			} else {
+				// 其他字段通过update_field端点保存
+				formData.append(fieldName, document.getElementById(fieldName).value);
+				formData.append('active_tab', fieldName);
+				saveUrl = "{{ update_field_template_url }}".replace('0', scriptId) + "?field=" + fieldName;
+			}
+
+			fetch(saveUrl, {
+				method: 'POST',
+				body: formData,
+				headers: {
+					'Accept': 'application/json',
+					'X-Requested-With': 'XMLHttpRequest'
+				}
+			})
+				.then(response => {
+					if (!response.ok) {
+						return response.json().then(data => {
+							throw new Error(data.message || '保存失败');
+						});
+					}
+					return response.json();
+				})
+				.catch(error => {
+					console.error('自动保存失败:', error);
+				});
+		}
+
+		// 切换模型
+		async function switchModel(model) {
+			try {
+				const response = await fetch('/api/model/set', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						'Accept': 'application/json'
+					},
+					body: JSON.stringify({ model: model })
+				});
+				const data = await response.json();
+				if (data.success) {
+					// 可以显示一个提示，但不强制
+					console.log('模型已切换到:', model);
+				} else {
+					alert('切换模型失败: ' + (data.message || '未知错误'));
+				}
+			} catch (error) {
+				console.error('切换模型失败:', error);
+				alert('切换模型失败，请稍后重试');
+			}
+		}
+
+		// 获取当前模型
+		async function loadCurrentModel() {
+			try {
+				const response = await fetch('/api/model/current', {
+					method: 'GET',
+					headers: {
+						'Accept': 'application/json'
+					}
+				});
+				const data = await response.json();
+				if (data.success && data.model) {
+					const modelSelect = document.getElementById('model-select');
+					if (modelSelect) {
+						modelSelect.value = data.model;
+					}
+				}
+			} catch (error) {
+				console.error('获取当前模型失败:', error);
+			}
+		}
+
+		// 页面加载时激活指定的标签页
+		document.addEventListener('DOMContentLoaded', function () {
+			// 加载当前选择的模型
+			loadCurrentModel();
+
+			const activeTab = '{{ active_tab }}';
+			const tab = document.querySelector(`#${activeTab}-tab`);
+			if (tab) {
+				const tabInstance = new bootstrap.Tab(tab);
+				tabInstance.show();
+			}
+
+			// 为所有字段添加自动保存
+			const knowledgeTextarea = document.getElementById('knowledge');
+			const styleTextarea = document.getElementById('style');
+			const backgroundTextarea = document.getElementById('background');
+			const titleInput = document.getElementById('title');
+			const contentTextarea = document.getElementById('content');
+			const wordCountInput = document.getElementById('word_count');
+			const styleTypeSelect = document.getElementById('style_type');
+			const writeStyleSelect = document.getElementById('write_style');
+			const genreSelect = document.getElementById('genre');
+			const hasBranchingSelect = document.getElementById('has_branching');
+
+			// 基本信息字段自动保存
+			if (titleInput) {
+				const debouncedSaveTitle = debounce(() => autoSave('title'), 1500);
+				titleInput.addEventListener('input', debouncedSaveTitle);
+			}
+
+			if (contentTextarea) {
+				const debouncedSaveContent = debounce(() => autoSave('content'), 1500);
+				contentTextarea.addEventListener('input', debouncedSaveContent);
+			}
+
+			if (wordCountInput) {
+				const debouncedSaveWordCount = debounce(() => autoSave('word_count'), 1500);
+				wordCountInput.addEventListener('input', debouncedSaveWordCount);
+			}
+
+			if (styleTypeSelect) {
+				styleTypeSelect.addEventListener('change', debounce(() => autoSave('style_type'), 1500));
+			}
+
+			if (writeStyleSelect) {
+				writeStyleSelect.addEventListener('change', debounce(() => autoSave('write_style'), 1500));
+			}
+
+			if (genreSelect) {
+				genreSelect.addEventListener('change', debounce(() => autoSave('genre'), 1500));
+			}
+
+			if (hasBranchingSelect) {
+				hasBranchingSelect.addEventListener('change', debounce(() => autoSave('has_branching'), 1500));
+			}
+
+			if (knowledgeTextarea) {
+				const debouncedSaveKnowledge = debounce(() => autoSave('knowledge'), 1500);
+				knowledgeTextarea.addEventListener('input', debouncedSaveKnowledge);
+			}
+
+			if (styleTextarea) {
+				const debouncedSaveStyle = debounce(() => autoSave('style'), 1500);
+				styleTextarea.addEventListener('input', debouncedSaveStyle);
+			}
+
+			if (backgroundTextarea) {
+				const debouncedSaveBackground = debounce(() => autoSave('background'), 1500);
+				backgroundTextarea.addEventListener('input', debouncedSaveBackground);
+			}
+		});
+
+		// AI生成各种内容
+		async function generate(fieldName, optimize = '') {
+			if (isGenerating) {
+				alert('生成中，请等待');
+				return;
+			}
+
+			const title = document.getElementById('title').value;
+			const content = document.getElementById('content').value;
+			const genre = document.getElementById('genre').value;
+			const background = document.getElementById('background').value;
+			const knowledge = document.getElementById('knowledge').value;
+			const style = document.getElementById('style').value;
+			const write_style = document.getElementById('write_style').value;
+			const outline = document.getElementById('outline').value;
+			const word_count = document.getElementById('word_count').value;
+
+			const scriptId = getScriptId();
+			const jsonData = {
+				script_id: scriptId,
+				title: title,
+				content: content,
+				genre: genre,
+				background: background,
+				knowledge: knowledge,
+				word_count: word_count,
+				style: style,
+				write_style: write_style,
+				outline: outline,
+				optimize: optimize,
+				additional_requirements: '无',
+				field_name: fieldName
+			};
+
+			try {
+				// 初始化生成状态和控制器
+				isGenerating = true;
+				abortController = new AbortController();
+
+				const validateResponse = await fetch('/api/validate', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify(jsonData)
+				});
+
+				const validateData = await validateResponse.json();
+
+				if (!validateData.success || validateData.status !== 'validation_passed') {
+					alert(validateData.message || '验证失败');
+					return;
+				}
+
+				let generationPrompt = prompt('请输入生成提示:');
+				if (generationPrompt === null) {
+					return;
+				}
+				if (generationPrompt === '') {
+					generationPrompt = '无';
+				}
+				jsonData.additional_requirements = generationPrompt;
+
+				showLoading();
+
+				let url = '/api/generate';
+				if (fieldName == 'outline') {
+					url = '/api/generate/outline';
+				}
+
+				const generateResponse = await fetch(url, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify(jsonData),
+					signal: abortController.signal
+				});
+
+				const generateData = await generateResponse.json();
+
+				if (generateData.success && generateData.status === 'generating_completed') {
+					// 直接更新文本框内容，不刷新页面
+					const textArea = document.getElementById(fieldName);
+					if (textArea) {
+						textArea.value = generateData.content;
+					}
+					save(fieldName);
+
+					// 触发自定义事件通知
+					document.dispatchEvent(new CustomEvent('generating_completed'));
+				} else {
+					alert(generateData.message || '生成失败');
+				}
+			} catch (error) {
+				if (error.name === 'AbortError') {
+				} else {
+					alert('生成失败，请稍后重试');
+				}
+			} finally {
+				isGenerating = false;
+				abortController = null;
+
+				// 手动触发生成完成事件
+				document.dispatchEvent(new CustomEvent('generating_completed'));
+
+				// 隐藏加载动画
+				hideLoading();
+			}
+		}
+
+		// AI优化各种内容
+		async function optimize(fieldName) {
+			await generate(fieldName, '_optimize');
+		}
+
+		// 保存剧本
+		function saveScript() {
+			const formData = new FormData();
+			formData.append('title', document.getElementById('title').value);
+			formData.append('word_count', document.getElementById('word_count').value);
+			formData.append('style_type', document.getElementById('style_type').value);
+			formData.append('write_style', document.getElementById('write_style').value);
+			formData.append('genre', document.getElementById('genre').value);
+			formData.append('has_branching', document.getElementById('has_branching').value);
+			formData.append('content', document.getElementById('content').value);
+
+			// 添加背景设定
+			const backgroundElement = document.getElementById('background');
+			if (backgroundElement) {
+				formData.append('background', backgroundElement.value);
+			}
+
+			// 获取当前激活的标签页
+			const activeTab = document.querySelector('.nav-link.active').id.replace('-tab', '');
+			formData.append('active_tab', activeTab);
+
+			{% if script %}
+			{% set edit_url = url_for('dashboard.edit_script', script_id = script.id) %}
+			const saveUrl = "{{ edit_url }}";
+			{% else %}
+			{% set new_url = url_for('dashboard.new_script') %}
+			const saveUrl = "{{ new_url }}";
+			{% endif %}
+
+			fetch(saveUrl, {
+				method: 'POST',
+				body: formData,
+				headers: {
+					'Accept': 'application/json',
+					'X-Requested-With': 'XMLHttpRequest'
+				}
+			})
+				.then(response => {
+					if (!response.ok) {
+						return response.json().then(data => {
+							throw new Error(data.message || '保存失败');
+						});
+					}
+					return response.json();
+				})
+				.then(data => {
+					if (data.success) {
+						// 保存成功后重载页面，进入编辑模式
+						if (data.script_id) {
+							{% set edit_script_base_url = url_for('dashboard.edit_script', script_id = 0) %}
+							window.location.href = "{{ edit_script_base_url }}".replace('0', data.script_id);
+						} else {
+							window.location.reload();
+						}
+					} else {
+						throw new Error(data.message || '保存失败');
+					}
+				})
+				.catch(error => {
+					alert('保存剧本失败: ' + error.message);
+				});
+		}
+
+		// 保存各种内容
+		function save(fieldName) {
+			const formData = new FormData();
+			formData.append(fieldName, document.getElementById(fieldName).value);
+			formData.append('active_tab', fieldName);
+
+			// 获取scriptId
+			const scriptId = getScriptId();
+
+			// 使用通用的update_field端点，通过查询参数传递字段名
+			{% set update_field_template_url_2 = url_for('dashboard.update_field', script_id = 0) %}
+			const saveUrl = "{{ update_field_template_url_2 }}".replace('0', scriptId) + "?field=" + fieldName;
+
+			fetch(saveUrl, {
+				method: 'POST',
+				body: formData,
+				headers: {
+					'Accept': 'application/json',
+					'X-Requested-With': 'XMLHttpRequest'
+				}
+			})
+				.then(response => {
+					if (!response.ok) {
+						return response.json().then(data => {
+							throw new Error(data.message || '保存失败');
+						});
+					}
+					return response.json();
+				})
+				.then(data => {
+					if (data.success) {
+						// 只显示成功消息，不进行页面跳转
+						//alert(data.message);
+					} else {
+						throw new Error(data.message || '保存失败');
+					}
+				})
+				.catch(error => {
+					alert('保存失败: ' + error.message);
+				});
+		}
+
+		// 生成角色
+		async function generateCharacters() {
+			if (isGenerating) {
+				alert('生成中，请等待');
+				return;
+			}
+
+			const title = document.getElementById('title').value;
+			const content = document.getElementById('content').value;
+			const genre = document.getElementById('genre').value;
+			const background = document.getElementById('background').value;
+			const knowledge = document.getElementById('knowledge').value;
+			const scriptId = getScriptId();
+
+			isGenerating = true;
+			abortController = new AbortController();
+
+			const jsonData = {
+				field_name: 'characters',
+				title: title,
+				content: content,
+				background: background,
+				knowledge: knowledge,
+				genre: genre,
+				script_id: scriptId,
+				character_count: 5,
+				optimize: ''
+			};
+
+			try {
+				const validateResponse = await fetch('/api/validate', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify(jsonData)
+				});
+
+				const validateData = await validateResponse.json();
+
+				if (!validateData.success || validateData.status !== 'validation_passed') {
+					alert(validateData.message || '验证失败');
+					return;
+				}
+
+				const character_count = prompt('请输入要生成的角色数量:');
+				if (character_count && parseInt(character_count) > 0) {
+					jsonData.character_count = parseInt(character_count);
+				} else {
+					alert('请输入正确的角色数量');
+					return;
+				}
+				showLoading();
+
+				const response = await fetch('/api/generate/characters', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify(jsonData),
+					signal: abortController.signal
+				});
+				const data = await response.json();
+
+				if (data.success && data.status === 'generating_completed') {
+					// 获取当前激活的标签页
+					const activeTab = document.querySelector('.nav-link.active').id.replace('-tab', '');
+					// 刷新页面时保持当前标签页状态
+					window.location.href = window.location.pathname + '?tab=' + activeTab;
+				} else {
+					alert(data.message || '生成失败');
+				}
+			} catch (error) {
+				if (error.name != 'AbortError') {
+					alert('生成失败，请稍后重试');
+				}
+			} finally {
+				isGenerating = false;
+				abortController = null;
+
+				// 隐藏加载动画
+				hideLoading();
+			}
+		}
+
+		// 编辑角色
+		function editCharacter(characterId) {
+			const scriptId = getScriptId();
+			if (scriptId) {
+				window.location.href = `/characters/${scriptId}/character/${characterId}/edit`;
+			}
+		}
+
+		// 删除角色
+		function deleteCharacter(characterId, currentPage) {
+			if (confirm('确定要删除这个角色吗？')) {
+				{% if script %}
+				{% set delete_char_base_url = url_for('characters.delete_character', script_id = script.id, character_id = 0) %}
+				const deleteUrl = "{{ delete_char_base_url }}".replace('0', characterId);
+				{% else %}
+				const deleteUrl = "#";
+				{% endif %}
+
+				fetch(deleteUrl, {
+					method: 'POST',
+					headers: {
+						'Accept': 'application/json',
+						'X-Requested-With': 'XMLHttpRequest'
+					}
+				})
+					.then(response => {
+						if (!response.ok) {
+							return response.json().then(data => {
+								throw new Error(data.message || '删除失败');
+							});
+						}
+						return response.json();
+					})
+					.then(data => {
+						if (data.success) {
+							window.location.reload();
+						}
+					})
+					.catch(error => {
+						alert('删除角色失败: ' + error.message);
+					});
+			}
+		}
+
+		// 生成章节
+		async function generateChapters() {
+			if (isGenerating) {
+				alert('生成中，请等待');
+				return;
+			}
+
+			const background = document.getElementById('background').value;
+			const knowledge = document.getElementById('knowledge').value;
+			const outline = document.getElementById('outline').value;
+			const scriptId = getScriptId();
+
+			isGenerating = true;
+			abortController = new AbortController();
+
+			const jsonData = {
+				field_name: 'chapters',
+				background: background,
+				knowledge: knowledge,
+				script_id: scriptId,
+				outline: outline,
+				chapters_count: 1,
+				from: 1,
+				to: 1,
+				characters: "_",
+				optimize: ''
+			};
+
+			try {
+				const validateResponse = await fetch('/api/validate', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify(jsonData)
+				});
+
+				const validateData = await validateResponse.json();
+
+				if (!validateData.success || validateData.status !== 'validation_passed') {
+					alert(validateData.message || '验证失败');
+					return;
+				}
+
+				const chapters_count = prompt('请输入要生成的章节数量:', '5');
+				if (chapters_count && parseInt(chapters_count) > 0) {
+					jsonData.chapters_count = parseInt(chapters_count);
+				} else {
+					alert('请输入正确的章节数量');
+					return;
+				}
+				showLoading();
+
+				const response = await fetch('/api/generate/chapters', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify(jsonData),
+					signal: abortController.signal
+				});
+				const data = await response.json();
+
+				if (data.success && data.status === 'generating_completed') {
+					// 获取当前激活的标签页
+					const activeTab = document.querySelector('.nav-link.active').id.replace('-tab', '');
+					// 刷新页面时保持当前标签页状态
+					window.location.href = window.location.pathname + '?tab=' + activeTab;
+				} else {
+					alert(data.message || '生成失败');
+				}
+			} catch (error) {
+				if (error.name != 'AbortError') {
+					alert('生成失败，请稍后重试');
+				}
+			} finally {
+				isGenerating = false;
+				abortController = null;
+
+				// 隐藏加载动画
+				hideLoading();
+			}
+		}
+
+		// 编辑章节
+		function editChapter(chapterId) {
+			window.location.href = `/chapters/chapters/${chapterId}/edit`;
+		}
+
+		// 删除章节
+		function deleteChapter(chapterId) {
+			if (confirm('确定要删除这个章节吗？')) {
+				// 获取当前激活的标签页
+				const activeTab = document.querySelector('.nav-link.active').id.replace('-tab', '');
+
+				const deleteUrl = "{{ url_for('chapters.delete_chapter', chapter_id=0) }}".replace('0', chapterId);
+
+				fetch(deleteUrl, {
+					method: 'DELETE',
+					headers: {
+						'Accept': 'application/json',
+						'X-Requested-With': 'XMLHttpRequest'
+					}
+				})
+					.then(response => {
+						if (!response.ok) {
+							return response.json().then(data => {
+								throw new Error(data.message || '删除失败');
+							});
+						}
+						return response.json();
+					})
+					.then(data => {
+						if (data.success) {
+							// 刷新页面时保持当前标签页状态
+							window.location.href = window.location.pathname + '?tab=' + activeTab;
+						} else {
+							throw new Error(data.message || '删除失败');
+						}
+					})
+					.catch(error => {
+						alert('删除章节失败: ' + error.message);
+					});
+			}
+		}
+
+		// 显示分支管理
+		function showBranches() {
+			const scriptId = getScriptId();
+
+			if (scriptId) {
+				window.location.href = `/chapters/branches/${scriptId}`;
+			} else {
+				alert('无法获取剧本ID，请刷新页面重试');
+			}
+		}
+
+		// 初始化思维导图
+		let mindMap;
+		let isDragging = false;
+		let startX, startY;
+		let offsetX = 0, offsetY = 0;
+		let scale = 1;
+
+		document.addEventListener('DOMContentLoaded', function () {
+			// 检查容器是否存在，如果不存在则不初始化思维导图
+			const container = document.getElementById('mind-container');
+			if (!container) {
+				return; // 容器不存在，不初始化思维导图
+			}
+
+			// 直接扩展jsMind的视图层，修改连线绘制方法
+			const oldViewProviderShow = jsMind.view_provider.prototype.show;
+
+			jsMind.view_provider.prototype.show = function (mind) {
+				// 调用原始方法先绘制基本结构
+				oldViewProviderShow.call(this, mind);
+
+				// 查找并扩展canvas层的绘制方法
+				if (this.graph && this.graph.canvas) {
+					// 获取画布
+					const canvas_ctx = this.graph.canvas.getContext('2d');
+
+					// 重写绘制线的方法
+					const oldDrawLine = this.graph.canvas.draw_line;
+
+					this.graph.canvas.draw_line = function (node1, node2, offset) {
+						if (!node1 || !node2) return;
+
+						// 获取节点元素
+						const node1_el = document.getElementById(node1._id);
+						const node2_el = document.getElementById(node2._id);
+
+						if (node1_el && node2_el) {
+							// 计算节点中心点
+							const node1_rect = node1_el.getBoundingClientRect();
+							const node2_rect = node2_el.getBoundingClientRect();
+
+							// 计算相对于画布的位置
+							const canvas_rect = canvas_ctx.canvas.getBoundingClientRect();
+
+							// 创建两个点表示节点中心
+							const p1 = {
+								x: (node1.direction === 'right') ?
+									node1.x + node1_rect.width :
+									node1.x,
+								y: node1.y + node1_rect.height / 2,
+								_id: node1._id
+							};
+
+							const p2 = {
+								x: (node2.direction === 'right') ?
+									node2.x :
+									node2.x + node2_rect.width,
+								y: node2.y + node2_rect.height / 2,
+								_id: node2._id
+							};
+
+							// 调用原始绘制方法，但传入修改后的点
+							oldDrawLine.call(this, p1, p2, offset);
+						} else {
+							// 如果找不到节点元素，使用原始方法
+							oldDrawLine.call(this, node1, node2, offset);
+						}
+					};
+				}
+			};
+
+			const options = {
+				container: 'mind-container',
+				theme: 'primary',
+				editable: true,
+				mode: 'full',
+				view: {
+					hmargin: 100,
+					vmargin: 50,
+					line_width: 2,
+					line_color: '#375a7f'
+				},
+				layout: {
+					hspace: 120,
+					vspace: 80,
+					pspace: 30
+				}
+			};
+
+			{% if script and script.mind_map %}
+			{% set mind_map_json = script.mind_map | tojson %}
+			{% set parsed_mind_data = mind_map_json %}
+			const mindData = {
+				meta: {
+					name: '思维导图',
+					author: 'script_maker',
+					version: '0.2'
+				},
+				format: 'node_tree',
+				data: JSON.parse({{ parsed_mind_data }}).data
+			};
+		{% else %}
+		{% if script %}
+		{% set script_title_value = script.title %}
+		{% else %}
+		{% set script_title_value = "新剧本" %}
+		{% endif %}
+		const mindData = {
+			meta: {
+				name: '思维导图',
+				author: 'script_maker',
+				version: '0.2'
+			},
+			format: 'node_tree',
+			data: {
+				id: 'root',
+				topic: '{{ script_title_value }}',
+				expanded: true,
+				isroot: true,
+				direction: 'right',
+				children: []
+			}
+		};
+		{% endif %}
+
+		mindMap = new jsMind(options);
+		mindMap.show(mindData);
+
+		// 获取容器元素（已经检查过存在性）
+		const jmnodes = container.querySelector('jmnodes');
+		const inner = container.querySelector('.jsmind-inner');
+
+		// 设置初始位置
+		if (inner) {
+			inner.style.transformOrigin = 'center center';
+			inner.style.transform = 'translate(-50%, -50%) scale(1)';
+			inner.style.left = '50%';
+			inner.style.top = '50%';
+		}
+
+		// 鼠标按下事件
+		if (container) {
+			container.addEventListener('mousedown', (e) => {
+				if (e.button !== 0) return; // 只响应左键
+				if (e.target.tagName.toLowerCase() === 'jmnode') return; // 不处理节点的拖动
+
+				isDragging = true;
+				container.style.cursor = 'grabbing';
+				startX = e.clientX - offsetX;
+				startY = e.clientY - offsetY;
+
+				// 阻止文本选择
+				e.preventDefault();
+			});
+
+			// 鼠标移动事件
+			container.addEventListener('mousemove', (e) => {
+				if (!isDragging || !inner) return;
+				e.preventDefault();
+
+				offsetX = e.clientX - startX;
+				offsetY = e.clientY - startY;
+
+				// 更新位置
+				inner.style.transform = `translate(calc(-50% + ${offsetX}px), calc(-50% + ${offsetY}px)) scale(${scale})`;
+			});
+
+			// 鼠标离开事件
+			container.addEventListener('mouseleave', () => {
+				isDragging = false;
+				container.style.cursor = 'grab';
+			});
+
+			// 滚轮缩放事件
+			container.addEventListener('wheel', (e) => {
+				e.preventDefault();
+				if (!inner) return;
+
+				const delta = e.deltaY;
+				const scaleStep = 0.1;
+
+				if (delta > 0) {
+					scale = Math.max(0.1, scale - scaleStep);
+				} else {
+					scale = Math.min(2, scale + scaleStep);
+				}
+
+				inner.style.transform = `translate(calc(-50% + ${offsetX}px), calc(-50% + ${offsetY}px)) scale(${scale})`;
+			}, { passive: false });
+
+			// 设置初始光标样式
+			container.style.cursor = 'grab';
+		}
+
+		// 鼠标松开事件（全局）
+		document.addEventListener('mouseup', () => {
+			isDragging = false;
+			if (container) {
+				container.style.cursor = 'grab';
+			}
+		});
+
+		// 调整容器大小以适应内容
+		if (container) {
+			const resizeObserver = new ResizeObserver(() => {
+				if (mindMap) {
+					mindMap.resize();
+				}
+			});
+			resizeObserver.observe(container);
+		}
+
+		// 监听节点选择事件
+		if (mindMap) {
+			mindMap.add_event_listener((type, data) => {
+				if (type === 'select_node') {
+					const node = mindMap.get_node(data.node.id);
+					if (node) {
+						mindMap.select_node(node.id);
+					}
+				}
+			});
+		}
+		});
+
+		// 生成思维导图
+		async function generateMind() {
+			if (isGenerating) {
+				alert('生成中，请等待');
+				return;
+			}
+
+			const title = document.getElementById('title').value;
+			const scriptId = getScriptId();
+
+			isGenerating = true;
+			abortController = new AbortController();
+
+			const jsonData = {
+				field_name: 'mind_map',
+				title: title,
+				script_id: scriptId
+			};
+
+			try {
+				showLoading();
+
+				const response = await fetch('/api/generate/mind', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify(jsonData),
+					signal: abortController.signal
+				});
+				const data = await response.json();
+
+				if (data.success && data.status === 'generating_completed') {
+					// 更新思维导图数据
+					try {
+						const mindData = JSON.parse(data.mind_map);
+
+						if (!mindData.chapters || mindData.chapters.length == 0) {
+							alert('请先生成章节。');
+							return;
+						}
+
+						// 转换数据为jsMind格式
+						const jsMindData = convertChaptersToMindMap(mindData);
+
+						// 显示思维导图
+						mindMap.show(jsMindData);
+
+						// 自动保存
+						saveMind();
+
+					} catch (e) {
+						alert('解析思维导图数据失败: ' + e.message);
+					}
+				} else {
+					alert(data.message || '生成失败');
+				}
+			} catch (error) {
+				if (error.name != 'AbortError') {
+					alert('生成失败，请稍后重试');
+				}
+			} finally {
+				isGenerating = false;
+				abortController = null;
+
+				// 隐藏加载动画
+				hideLoading();
+			}
+		}
+
+		// 将章节数据转换为思维导图格式
+		function convertChaptersToMindMap(mindData) {
+			// 创建思维导图基本结构
+			const jsMindData = {
+				meta: {
+					name: '思维导图',
+					author: 'script_maker',
+					version: '0.2'
+				},
+				format: 'node_tree',
+				data: {
+					id: 'root',
+					topic: mindData.title || '剧本结构',
+					expanded: true,
+					isroot: true,
+					direction: 'right',
+					children: []
+				}
+			};
+
+			// 为每个章节创建节点
+			if (mindData.chapters && mindData.chapters.length > 0) {
+				mindData.chapters.forEach((chapter, index) => {
+					// 创建章节节点
+					const chapterNode = {
+						id: `chapter_${index + 1}`,
+						topic: `第${chapter.number}章: ${chapter.title}`,
+						expanded: true,
+						direction: 'right',
+						children: []
+					};
+
+					// 添加人物节点
+					if (chapter.characters && chapter.characters.length > 0) {
+						const charactersNode = {
+							id: `chapter_${index + 1}_characters`,
+							topic: '人物',
+							expanded: true,
+							children: []
+						};
+
+						chapter.characters.forEach((character, charIndex) => {
+							charactersNode.children.push({
+								id: `chapter_${index + 1}_character_${charIndex}`,
+								topic: character
+							});
+						});
+
+						chapterNode.children.push(charactersNode);
+					}
+
+					// 添加地点节点
+					if (chapter.locations && chapter.locations.length > 0) {
+						const locationsNode = {
+							id: `chapter_${index + 1}_locations`,
+							topic: '地点',
+							expanded: true,
+							children: []
+						};
+
+						chapter.locations.forEach((location, locIndex) => {
+							locationsNode.children.push({
+								id: `chapter_${index + 1}_location_${locIndex}`,
+								topic: location
+							});
+						});
+
+						chapterNode.children.push(locationsNode);
+					}
+
+					// 添加时间节点
+					if (chapter.time && chapter.time.length > 0) {
+						const timeNode = {
+							id: `chapter_${index + 1}_time`,
+							topic: '时间',
+							expanded: true,
+							children: []
+						};
+
+						chapter.time.forEach((time, timeIndex) => {
+							timeNode.children.push({
+								id: `chapter_${index + 1}_time_${timeIndex}`,
+								topic: time
+							});
+						});
+
+						chapterNode.children.push(timeNode);
+					}
+
+					// 添加事件节点
+					if (chapter.events && chapter.events.length > 0) {
+						const eventsNode = {
+							id: `chapter_${index + 1}_events`,
+							topic: '事件',
+							expanded: true,
+							children: []
+						};
+
+						chapter.events.forEach((event, eventIndex) => {
+							eventsNode.children.push({
+								id: `chapter_${index + 1}_event_${eventIndex}`,
+								topic: event
+							});
+						});
+
+						chapterNode.children.push(eventsNode);
+					}
+
+					// 添加关键点节点
+					if (chapter.nodes && chapter.nodes.length > 0) {
+						const nodesNode = {
+							id: `chapter_${index + 1}_nodes`,
+							topic: '重要节点',
+							expanded: true,
+							children: []
+						};
+
+						chapter.nodes.forEach((node, nodeIndex) => {
+							nodesNode.children.push({
+								id: `chapter_${index + 1}_node_${nodeIndex}`,
+								topic: node
+							});
+						});
+
+						chapterNode.children.push(nodesNode);
+					}
+
+					// 将章节添加到根节点
+					jsMindData.data.children.push(chapterNode);
+				});
+			}
+			console.log(jsMindData);
+			return jsMindData;
+		}
+
+		// 添加子节点
+		function addNode() {
+			const selectedNode = mindMap.get_selected_node();
+			if (!selectedNode) {
+				alert('请先选择一个节点');
+				return;
+			}
+
+			const nodeName = prompt('请输入节点名称:');
+			if (!nodeName) return;
+
+			const nodeId = 'node_' + Date.now();
+			mindMap.add_node(selectedNode, nodeId, nodeName, {
+				'background-color': '#375a7f',
+				'color': '#ffffff',
+				'font-size': '14px',
+				'padding': '10px',
+				'border-radius': '4px'
+			});
+			mindMap.select_node(nodeId);
+			mindMap.expand_node(selectedNode);
+		}
+
+		// 删除节点
+		function deleteNode() {
+			const selectedNode = mindMap.get_selected_node();
+			if (!selectedNode) {
+				alert('请先选择一个节点');
+				return;
+			}
+
+			if (selectedNode.id === 'root') {
+				alert('不能删除根节点');
+				return;
+			}
+
+			if (confirm('确定要删除这个节点吗？')) {
+				mindMap.remove_node(selectedNode);
+			}
+		}
+
+		// 保存思维导图
+		function saveMind() {
+			const mindData = mindMap.get_data();
+			const formData = new FormData();
+			const fieldName = 'mind_map';
+			formData.append(fieldName, JSON.stringify(mindData));
+			formData.append('active_tab', fieldName);
+
+			// 获取scriptId
+			const scriptId = getScriptId();
+
+			// 使用通用的update_field端点，通过查询参数传递字段名
+			const saveUrl = "{{ url_for('dashboard.update_field', script_id=0) }}".replace('0', scriptId) + "?field=" + fieldName;
+
+			fetch(saveUrl, {
+				method: 'POST',
+				body: formData,
+				headers: {
+					'Accept': 'application/json',
+					'X-Requested-With': 'XMLHttpRequest'
+				}
+			})
+				.then(response => {
+					if (!response.ok) {
+						return response.json().then(data => {
+							throw new Error(data.message || '保存失败');
+						});
+					}
+					return response.json();
+				})
+				.then(data => {
+					if (data.success) {
+						// 只显示成功消息，不进行页面跳转
+						alert(data.message);
+					} else {
+						throw new Error(data.message || '保存失败');
+					}
+				})
+				.catch(error => {
+					alert('保存失败: ' + error.message);
+				});
+		}
+
+		// 导出故事内容
+		function exportStory() {
+			const scriptId = getScriptId();
+			if (scriptId) {
+				window.location.href = `/dashboard/script/${scriptId}/export_story_txt`;
+			} else {
+				alert('无法获取剧本ID，请刷新页面重试');
+			}
+		}
+
+		// 导出故事剧本
+		function exportScript() {
+			const scriptId = getScriptId();
+			if (scriptId) {
+				window.location.href = `/dashboard/script/${scriptId}/export_script_txt`;
+			} else {
+				alert('无法获取剧本ID，请刷新页面重试');
+			}
+		}
+
+		// 验证并导出
+		let validationData = null;
+		let validationType = null;
+
+		async function validateAndExport(type) {
+			if (isGenerating) {
+				alert('生成中，请等待');
+				return;
+			}
+
+			const scriptId = getScriptId();
+			if (!scriptId) {
+				alert('无法获取剧本ID，请刷新页面重试');
+				return;
+			}
+
+			try {
+				isGenerating = true;
+				abortController = new AbortController();
+				showLoading();
+
+				const response = await fetch(`/api/validate_content?script_id=${scriptId}&type=${type}`, {
+					method: 'GET',
+					headers: {
+						'Accept': 'application/json'
+					},
+					signal: abortController.signal
+				});
+
+				const data = await response.json();
+
+				if (data.success) {
+					validationData = data.validation_result;
+					validationType = type;
+
+					// 显示验证结果
+					document.getElementById('validation-content').textContent = validationData;
+					document.getElementById('validation-result').style.display = 'block';
+
+					// 滚动到验证结果区域
+					document.getElementById('validation-result').scrollIntoView({ behavior: 'smooth' });
+				} else {
+					alert(data.message || '验证失败');
+				}
+			} catch (error) {
+				if (error.name !== 'AbortError') {
+					alert('验证失败，请稍后重试: ' + error.message);
+				}
+			} finally {
+				isGenerating = false;
+				abortController = null;
+				hideLoading();
+			}
+		}
+
+		// 关闭验证结果
+		function closeValidationResult() {
+			document.getElementById('validation-result').style.display = 'none';
+			validationData = null;
+			validationType = null;
+		}
+
+		// 导出验证后的内容
+		function exportAfterValidation() {
+			if (!validationType) {
+				alert('没有验证结果可导出');
+				return;
+			}
+
+			const scriptId = getScriptId();
+			if (!scriptId) {
+				alert('无法获取剧本ID，请刷新页面重试');
+				return;
+			}
+
+			// 获取脚本标题
+			const scriptTitle = document.getElementById('title') ? document.getElementById('title').value : '故事';
+
+			// 创建包含验证结果的导出内容
+			const exportContent = `【内容验证报告】\n\n${validationData}\n\n\n【原始内容】\n\n`;
+
+			// 根据类型导出
+			if (validationType === 'story') {
+				// 先获取原始内容，然后添加验证结果
+				fetch(`/dashboard/script/${scriptId}/export_story_txt`)
+					.then(response => response.text())
+					.then(originalContent => {
+						const fullContent = exportContent + originalContent;
+						downloadTextFile(fullContent, `${scriptTitle || '故事'}_验证报告_故事内容.txt`);
+					})
+					.catch(error => {
+						alert('导出失败: ' + error.message);
+					});
+			} else if (validationType === 'script') {
+				fetch(`/dashboard/script/${scriptId}/export_script_txt`)
+					.then(response => response.text())
+					.then(originalContent => {
+						const fullContent = exportContent + originalContent;
+						downloadTextFile(fullContent, `${scriptTitle || '故事'}_验证报告_剧本.txt`);
+					})
+					.catch(error => {
+						alert('导出失败: ' + error.message);
+					});
+			}
+		}
+
+		// 下载文本文件
+		function downloadTextFile(content, filename) {
+			const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = filename;
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+			URL.revokeObjectURL(url);
+		}
+
+	</script>
+
+	<style>
+		.nav-pills .nav-link {
+			color: rgba(255, 255, 255, 0.8);
+			border-color: transparent;
+			border-radius: 0.25rem;
+			transition: all 0.2s ease;
+		}
+
+		.nav-pills .nav-link:hover {
+			color: #ffffff;
+			background-color: rgba(255, 255, 255, 0.1);
+		}
+
+		.nav-pills .nav-link.active {
+			color: #ffffff;
+			background-color: #375a7f;
+		}
+
+		.card-body {
+			height: calc(100vh - 230px);
+		}
+
+		#mind-container {
+			background-color: #2a2a2a;
+			overflow: visible;
+			position: relative;
+			width: 100%;
+			height: 600px;
+			border: 1px solid #375a7f;
+			border-radius: 4px;
+		}
+
+		.jsmind-inner {
+			background-color: transparent !important;
+			position: absolute !important;
+			width: 100% !important;
+			height: 100% !important;
+			transform-origin: center center !important;
+			transition: transform 0.05s ease-out !important;
+			overflow: visible !important;
+		}
+
+		jmnodes {
+			position: relative !important;
+			transform: none !important;
+			overflow: visible !important;
+		}
+
+		/* 隐藏所有滚动条 */
+		::-webkit-scrollbar {
+			display: none;
+		}
+
+		* {
+			-ms-overflow-style: none;
+			scrollbar-width: none;
+		}
+
+		/* 确保tab内容区域也不显示滚动条 */
+		.tab-pane {
+			overflow: auto !important;
+			height: 100% !important;
+		}
+
+		/* 思维导图节点样式 */
+		jmnode {
+			background-color: #375a7f !important;
+			color: white !important;
+			box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+			padding: 10px !important;
+			border-radius: 4px !important;
+			border: 2px solid transparent !important;
+			text-align: center !important;
+		}
+
+		jmnode:hover {
+			background-color: #4a6d92 !important;
+			transform: scale(1.02);
+		}
+
+		jmnode.selected {
+			background-color: #5a8db2 !important;
+			border: 2px solid #00ff00 !important;
+			box-shadow: 0 0 10px rgba(0, 255, 0, 0.3) !important;
+		}
+
+		jmexpander {
+			border-color: #375a7f !important;
+		}
+
+		jmexpander:hover {
+			border-color: #5a8db2 !important;
+		}
+
+		canvas {
+			position: absolute !important;
+			top: 0 !important;
+			left: 0 !important;
+			z-index: -1 !important;
+		}
+	</style>
+</body>
+
+</html>

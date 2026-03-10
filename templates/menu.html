@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+	<title>菜单 - 剧本管理系统</title>
+	<link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+	<link rel="stylesheet" href="{{ url_for('static', filename='bootstrap.min.css') }}">
+	<link rel="stylesheet" href="{{ url_for('static', filename='dark-theme.css') }}">
+	<style>
+		.menu-container {
+			height: 100vh;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			background: rgba(33, 37, 41, 0.8);
+		}
+
+		.btn-menu {
+			width: 200px;
+			height: 200px;
+			margin: 20px;
+			font-size: 1.5rem;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			flex-direction: column;
+		}
+
+		.btn-menu i {
+			font-size: 3rem;
+			margin-bottom: 10px;
+		}
+	</style>
+
+	<style>
+		/* PC端样式优化 */
+		@media (min-width: 768px) {
+			.container {
+				max-width: 1200px;
+			}
+
+			h1,
+			h2,
+			h3,
+			h4,
+			h5,
+			h6 {
+				font-size: 1.2em;
+			}
+
+			.form-control {
+				font-size: 1rem;
+				padding: 0.75rem;
+			}
+
+			.btn {
+				font-size: 1rem;
+				padding: 0.75rem 1.5rem;
+			}
+		}
+
+		/* 移动端样式 */
+		@media (max-width: 767px) {
+
+			h1,
+			h2,
+			h3,
+			h4,
+			h5,
+			h6 {
+				font-size: 1em;
+			}
+
+			.form-control {
+				font-size: 16px;
+				/* 防止iOS缩放 */
+				padding: 0.5rem;
+			}
+
+			.btn {
+				font-size: 1rem;
+				padding: 0.5rem 1rem;
+			}
+		}
+	</style>
+</head>
+
+<body class="bg-dark text-light">
+	<div class="menu-container">
+		<div class="text-center">
+			<h1 class="mb-5">选择功能</h1>
+			<div class="d-flex justify-content-center">
+				<a href="{{ url_for('menu.text_generation') }}" class="btn btn-primary btn-menu">
+					<i>📝</i>
+					文案生成
+				</a>
+				<a href="{{ url_for('dashboard.index') }}" class="btn btn-success btn-menu">
+					<i>🎬</i>
+					剧本生成
+				</a>
+			</div>
+		</div>
+	</div>
+</body>
+
+</html>

@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+	<title>字体大小测试页面</title>
+	<link rel="stylesheet" href="{{ url_for('static', filename='bootstrap.min.css') }}">
+	<link rel="stylesheet" href="{{ url_for('static', filename='fix-font-size.css') }}">
+	<style>
+		body {
+			background-color: #f8f9fa;
+			padding: 20px;
+			font-family: Arial, sans-serif;
+		}
+
+		.test-container {
+			max-width: 800px;
+			margin: 0 auto;
+			background: white;
+			padding: 30px;
+			border-radius: 10px;
+			box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+		}
+
+		.test-section {
+			margin-bottom: 30px;
+			padding: 20px;
+			border: 1px solid #ddd;
+			border-radius: 5px;
+		}
+
+		.test-title {
+			color: #333;
+			margin-bottom: 15px;
+		}
+
+		.font-test {
+			margin: 10px 0;
+			padding: 10px;
+			background: #f8f9fa;
+			border-left: 4px solid #007bff;
+		}
+
+		.btn-test {
+			margin: 5px;
+		}
+
+		.form-test {
+			margin: 15px 0;
+		}
+
+		.form-test input,
+		.form-test textarea {
+			margin: 5px 0;
+		}
+	</style>
+</head>
+
+<body>
+	<div class="test-container">
+		<h1 class="test-title">字体大小测试页面</h1>
+		<p>这个页面用来测试字体大小修复是否生效</p>
+
+		<div class="test-section">
+			<h2 class="test-title">标题测试</h2>
+			<div class="font-test">
+				<h1>这是H1标题 - 应该显示为2rem大小</h1>
+				<h2>这是H2标题 - 应该显示为1.75rem大小</h2>
+				<h3>这是H3标题 - 应该显示为1.5rem大小</h3>
+				<h4>这是H4标题 - 应该显示为1.25rem大小</h4>
+				<h5>这是H5标题 - 应该显示为1.1rem大小</h5>
+				<h6>这是H6标题 - 应该显示为1.1rem大小</h6>
+			</div>
+		</div>
+
+		<div class="test-section">
+			<h2 class="test-title">按钮测试</h2>
+			<div class="font-test">
+				<button class="btn btn-primary btn-lg">大按钮 (btn-lg)</button>
+				<button class="btn btn-secondary">普通按钮</button>
+				<button class="btn btn-success btn-sm">小按钮 (btn-sm)</button>
+			</div>
+		</div>
+
+		<div class="test-section">
+			<h2 class="test-title">表单测试</h2>
+			<div class="form-test">
+				<input type="text" class="form-control" placeholder="输入框测试" value="这是输入框文本">
+				<textarea class="form-control" rows="3" placeholder="文本域测试">这是文本域内容</textarea>
+				<select class="form-control">
+					<option>选择框测试</option>
+					<option>选项1</option>
+					<option>选项2</option>
+				</select>
+			</div>
+		</div>
+
+		<div class="test-section">
+			<h2 class="test-title">文本测试</h2>
+			<div class="font-test">
+				<p>这是普通段落文本，应该显示为1rem大小</p>
+				<p class="lead">这是lead段落，应该显示为1.1rem大小</p>
+				<p class="small">这是small文本，应该显示为0.875rem大小</p>
+				<span>这是span文本</span>
+				<div>这是div文本</div>
+				<label>这是label文本</label>
+			</div>
+		</div>
+
+		<div class="test-section">
+			<h2 class="test-title">导航测试</h2>
+			<nav class="navbar navbar-expand-lg navbar-light bg-light">
+				<div class="container-fluid">
+					<a class="navbar-brand" href="#">导航品牌</a>
+					<div class="navbar-nav">
+						<a class="nav-link" href="#">导航链接1</a>
+						<a class="nav-link" href="#">导航链接2</a>
+					</div>
+				</div>
+			</nav>
+		</div>
+
+		<div class="test-section">
+			<h2 class="test-title">表格测试</h2>
+			<table class="table table-striped">
+				<thead>
+					<tr>
+						<th>表头1</th>
+						<th>表头2</th>
+						<th>表头3</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr>
+						<td>表格数据1</td>
+						<td>表格数据2</td>
+						<td>表格数据3</td>
+					</tr>
+					<tr>
+						<td>表格数据4</td>
+						<td>表格数据5</td>
+						<td>表格数据6</td>
+					</tr>
+				</tbody>
+			</table>
+		</div>
+
+		<div class="test-section">
+			<h2 class="test-title">响应式测试</h2>
+			<p>调整浏览器窗口大小，观察字体变化：</p>
+			<ul>
+				<li>PC端（≥768px）：标题较大，按钮较大</li>
+				<li>移动端（<768px）：标题较小，按钮较小< /li>
+			</ul>
+		</div>
+
+		<div class="test-section">
+			<h2 class="test-title">CSS文件状态</h2>
+			<div id="css-status" class="font-test">
+				正在检查CSS文件状态...
+			</div>
+		</div>
+	</div>
+
+	<script>
+		// 检查CSS文件是否加载
+		function checkCSSStatus() {
+			const cssStatus = document.getElementById('css-status');
+
+			// 检查fix-font-size.css是否加载
+			const styleSheets = Array.from(document.styleSheets);
+			const fixFontCSS = styleSheets.find(sheet =>
+				sheet.href && sheet.href.includes('fix-font-size.css')
+			);
+
+			if (fixFontCSS) {
+				cssStatus.innerHTML = '<span style="color: green;">✓ fix-font-size.css 已成功加载</span>';
+
+				// 检查CSS规则是否应用
+				try {
+					const rules = fixFontCSS.cssRules || fixFontCSS.rules;
+					if (rules && rules.length > 0) {
+						cssStatus.innerHTML += '<br><span style="color: green;">✓ CSS规则已加载，共 ' + rules.length + ' 条规则</span>';
+					}
+				} catch (e) {
+					cssStatus.innerHTML += '<br><span style="color: orange;">⚠ 无法读取CSS规则（可能是跨域问题）</span>';
+				}
+			} else {
+				cssStatus.innerHTML = '<span style="color: red;">✗ fix-font-size.css 未加载</span>';
+			}
+
+			// 检查当前字体大小
+			const h1 = document.querySelector('h1');
+			const computedStyle = window.getComputedStyle(h1);
+			const fontSize = computedStyle.fontSize;
+			cssStatus.innerHTML += '<br><span>当前H1字体大小: ' + fontSize + '</span>';
+		}
+
+		// 页面加载完成后检查
+		document.addEventListener('DOMContentLoaded', function () {
+			setTimeout(checkCSSStatus, 500);
+		});
+	</script>
+</body>
+
+</html>

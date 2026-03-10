@@ -1,0 +1,332 @@
+/* 暗黑主题样式 */
+body.dark-theme {
+    background-color: #121212 !important;
+    color: #e0e0e0 !important;
+}
+
+/* 导航栏样式优化 */
+.dark-theme .navbar {
+    background-color: #1e1e1e !important;
+    border-bottom: 1px solid #333 !important;
+}
+
+.dark-theme .navbar-dark .navbar-brand,
+.dark-theme .navbar-dark .nav-link {
+    color: #f0f0f0 !important;
+}
+
+.dark-theme .navbar-dark .nav-link:hover {
+    color: #8ab4f8 !important;
+}
+
+.dark-theme .navbar-toggler {
+    border-color: #444 !important;
+}
+
+.dark-theme .navbar-toggler-icon {
+    filter: invert(0.8) !important;
+}
+
+.dark-theme .navbar-dark .nav-link:active,
+.dark-theme .navbar-dark .nav-link:focus {
+    color: #aecbfa !important;
+}
+
+.dark-theme .navbar-dark .nav-item.active .nav-link {
+    color: #8ab4f8 !important;
+    font-weight: 500 !important;
+}
+
+/* 卡片和容器样式 */
+.dark-theme .card,
+.dark-theme .list-group-item,
+.dark-theme .modal-content {
+    background-color: #1e1e1e !important;
+    color: #e0e0e0 !important;
+    border-color: #333 !important;
+}
+
+.dark-theme .card-header,
+.dark-theme .list-group-item.active {
+    background-color: #2c2c2c !important;
+    border-color: #333 !important;
+}
+
+.dark-theme .card {
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.5) !important;
+}
+
+.dark-theme .shadow {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.5) !important;
+}
+
+/* 表格样式改进 */
+.dark-theme .table {
+    color: #e0e0e0 !important;
+    background-color: #1e1e1e !important;
+    --bs-table-hover-bg: rgba(84, 129, 187, 0.3) !important;
+    --bs-table-hover-color: #ffffff !important;
+}
+
+.dark-theme .table thead {
+    background-color: #262626 !important;
+    border-color: #333 !important;
+}
+
+.dark-theme .table thead th {
+    border-bottom: 2px solid #444 !important;
+    color: #ffffff !important;
+}
+
+/* 覆盖Bootstrap表格悬停效果 */
+.dark-theme .table-hover>tbody>tr:hover {
+    background-color: rgba(84, 129, 187, 0.3) !important;
+    color: #ffffff !important;
+}
+
+.dark-theme .table-hover>tbody>tr:hover>* {
+    --bs-table-accent-bg: rgba(84, 129, 187, 0.3) !important;
+    color: #ffffff !important;
+    background-color: transparent !important;
+}
+
+.dark-theme .table tbody tr:nth-of-type(odd) {
+    background-color: #1a1a1a !important;
+}
+
+.dark-theme .table tbody tr:nth-of-type(even) {
+    background-color: #222222 !important;
+}
+
+.dark-theme .table td, 
+.dark-theme .table th {
+    border-color: #333 !important;
+}
+
+.dark-theme .table-striped > tbody > tr:nth-of-type(odd) {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* 表单元素样式 */
+.dark-theme .form-control,
+.dark-theme .form-select {
+    background-color: #2c2c2c !important;
+    border-color: #444 !important;
+    color: #e0e0e0 !important;
+}
+
+.dark-theme .form-control:focus,
+.dark-theme .form-select:focus {
+    border-color: #4b7bab !important;
+    box-shadow: 0 0 0 0.25rem rgba(75, 123, 171, 0.25) !important;
+}
+
+.dark-theme .form-control::placeholder {
+    color: #6c757d !important;
+}
+
+.dark-theme .form-check-input {
+    background-color: #2c2c2c !important;
+    border-color: #444 !important;
+}
+
+.dark-theme .form-check-input:checked {
+    background-color: #4b7bab !important;
+    border-color: #4b7bab !important;
+}
+
+/* 按钮样式优化 */
+.dark-theme .btn-outline-primary {
+    color: #8ab4f8 !important;
+    border-color: #8ab4f8 !important;
+}
+
+.dark-theme .btn-outline-primary:hover {
+    background-color: #2c3e50 !important;
+    color: #ffffff !important;
+}
+
+.dark-theme .btn-outline-danger {
+    color: #f87f7f !important;
+    border-color: #f87f7f !important;
+}
+
+.dark-theme .btn-outline-danger:hover {
+    background-color: #502c2c !important;
+    color: #ffffff !important;
+}
+
+.dark-theme .btn-primary {
+    background-color: #2c3e50 !important;
+    border-color: #2c3e50 !important;
+}
+
+.dark-theme .btn-primary:hover {
+    background-color: #3c5166 !important;
+    border-color: #3c5166 !important;
+}
+
+.dark-theme .btn-outline-secondary {
+    color: #adb5bd !important;
+    border-color: #495057 !important;
+}
+
+.dark-theme .btn-outline-secondary:hover {
+    background-color: #343a40 !important;
+    color: #f8f9fa !important;
+    border-color: #495057 !important;
+}
+
+/* 消息提示样式 */
+.dark-theme .alert-success {
+    background-color: #2c502c !important;
+    color: #a3d7a3 !important;
+    border-color: #396639 !important;
+}
+
+.dark-theme .alert-danger {
+    background-color: #502c2c !important;
+    color: #d7a3a3 !important;
+    border-color: #663939 !important;
+}
+
+/* 分页样式改进 */
+.dark-theme .pagination .page-link {
+    background-color: #2c2c2c !important;
+    border-color: #444 !important;
+    color: #e0e0e0 !important;
+    transition: all 0.2s ease !important;
+    position: relative !important;
+}
+
+/* 增强数字分页按钮的样式 */
+.dark-theme .pagination .page-item:not(.disabled) .page-link {
+    color: #e0e0e0 !important;
+    font-weight: 500 !important;
+}
+
+.dark-theme .pagination .page-item.active .page-link {
+    background-color: #4b7bab !important;
+    border-color: #4b7bab !important;
+    color: #ffffff !important;
+    font-weight: bold !important;
+    box-shadow: 0 0 5px rgba(75, 123, 171, 0.5) !important;
+    z-index: 3 !important;
+}
+
+.dark-theme .pagination .page-item.disabled .page-link {
+    background-color: #1a1a1a !important;
+    border-color: #444 !important;
+    color: #6c757d !important;
+}
+
+/* 修复分页控件鼠标悬停效果 */
+.dark-theme .pagination .page-link:hover {
+    background-color: #3a5d82 !important;
+    color: #ffffff !important;
+    border-color: #3a5d82 !important;
+    box-shadow: 0 0 8px rgba(75, 123, 171, 0.7) !important;
+    z-index: 3 !important;
+}
+
+/* 分页控件激活项的悬停效果 */
+.dark-theme .pagination .page-item.active .page-link:hover {
+    background-color: #4b7bab !important;
+    border-color: #4b7bab !important;
+    color: #ffffff !important;
+    cursor: default !important;
+}
+
+/* 修复分页数字按钮的悬停效果 */
+.dark-theme .pagination .page-item:not(.active):not(.disabled) .page-link:hover {
+    background-color: #3a5d82 !important;
+    color: #ffffff !important;
+    border-color: #3a5d82 !important;
+}
+
+/* 文本颜色优化 */
+.dark-theme .text-muted {
+    color: #9e9e9e !important;
+}
+
+.dark-theme .form-label {
+    color: #c0c0c0 !important;
+}
+
+.dark-theme .text-dark {
+    color: #e0e0e0 !important;
+}
+
+.dark-theme .text-body {
+    color: #e0e0e0 !important;
+}
+
+/* 选中元素样式修正 */
+.dark-theme .btn-primary,
+.dark-theme .btn-primary:focus,
+.dark-theme .btn-primary:active {
+    color: #ffffff !important;
+}
+
+.dark-theme .btn-check:checked + .btn-primary,
+.dark-theme .btn-check:active + .btn-primary {
+    color: #ffffff !important;
+    background-color: #3a5d82 !important;
+    border-color: #3a5d82 !important;
+}
+
+/* 链接颜色改进 */
+.dark-theme a {
+    color: #8ab4f8 !important;
+}
+
+.dark-theme a:hover {
+    color: #aecbfa !important;
+    text-decoration: underline !important;
+}
+
+/* 水平分割线 */
+.dark-theme hr {
+    border-color: #333 !important;
+}
+
+/* 主题切换按钮样式 */
+.navbar-nav .nav-item .nav-link.btn {
+    font-size: 1.2rem;
+    padding: 0.375rem 0.75rem;
+    transition: transform 0.3s ease;
+}
+
+.navbar-nav .nav-item .nav-link.btn:hover {
+    transform: rotate(30deg);
+}
+
+.dark-theme .navbar-nav .nav-item .nav-link.btn {
+    color: #f8f9fa !important;
+}
+
+/* 标签页样式优化 */
+.dark-theme .nav-tabs {
+    border-bottom-color: #444 !important;
+}
+
+.dark-theme .nav-tabs .nav-link {
+    color: #8ab4f8 !important;
+    background-color: #2c2c2c !important;
+    border-color: #444 #444 transparent !important;
+    margin-right: 2px !important;
+}
+
+.dark-theme .nav-tabs .nav-link:hover {
+    color: #ffffff !important;
+    background-color: #3a5d82 !important;
+    border-color: #444 #444 transparent !important;
+    isolation: isolate !important;
+}
+
+.dark-theme .nav-tabs .nav-link.active {
+    color: #ffffff !important;
+    font-weight: 500 !important;
+    background-color: #4b7bab !important;
+    border-color: #4b7bab #4b7bab #1e1e1e !important;
+} 

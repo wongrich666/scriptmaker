@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <title>{% if character %}编辑角色{% else %}添加角色{% endif %} - 剧本管理系统</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='bootstrap.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='dark-theme.css') }}">
+
+    <style>
+        /* PC端样式优化 */
+        @media (min-width: 768px) {
+            .container {
+                max-width: 1200px;
+            }
+            h1, h2, h3, h4, h5, h6 {
+                font-size: 1.2em;
+            }
+            .form-control {
+                font-size: 1rem;
+                padding: 0.75rem;
+            }
+            .btn {
+                font-size: 1rem;
+                padding: 0.75rem 1.5rem;
+            }
+        }
+        
+        /* 移动端样式 */
+        @media (max-width: 767px) {
+            h1, h2, h3, h4, h5, h6 {
+                font-size: 1em;
+            }
+            .form-control {
+                font-size: 16px; /* 防止iOS缩放 */
+                padding: 0.5rem;
+            }
+            .btn {
+                font-size: 1rem;
+                padding: 0.5rem 1rem;
+            }
+        }
+    </style>
+</head>
+<body class="bg-dark text-light">
+    <!-- 加载动画覆盖层 -->
+    <div id="loading-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); z-index: 9999; display: none; justify-content: center; align-items: center; flex-direction: column;">
+        <img src="{{ url_for('static', filename='media/loading.gif') }}" alt="加载中" style="max-width: 400px; cursor: pointer;" id="loading-image">
+    </div>
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <img src="{{ url_for('static', filename='icon.png') }}" alt="系统图标" height="30" class="d-inline-block align-text-top me-2">
+                剧本管理系统
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <span class="nav-link">{{ current_user.email }}</span>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('auth.logout') }}">退出</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container py-5">
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-danger">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>{% if character %}编辑角色{% else %}添加角色{% endif %}</h2>
+            <a href="{{ url_for('dashboard.edit_script', script_id=script.id, tab='characters') }}" class="btn btn-outline-secondary">返回</a>
+        </div>
+
+        <div class="card bg-dark border-light">
+            <div class="card-body">
+                <form method="POST">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="name" class="form-label">角色名称</label>
+                                <input type="text" class="form-control bg-dark text-light" id="name" name="name" value="{{ character.name if character else '' }}" required>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="gender" class="form-label">性别/物种</label>
+                                <select class="form-select bg-dark text-light" id="gender" name="gender" required>
+                                    <option value="">请选择性别/物种</option>
+                                    <option value="男" {% if character and character.gender == '男' %}selected{% endif %}>男</option>
+                                    <option value="女" {% if character and character.gender == '女' %}selected{% endif %}>女</option>
+                                    <option value="其他" {% if character and character.gender == '其他' %}selected{% endif %}>其他</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="age" class="form-label">年龄</label>
+                                <input type="number" class="form-control bg-dark text-light" id="age" name="age" value="{{ character.age if character else '' }}" required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="description" class="form-label">角色描述</label>
+                        <textarea class="form-control bg-dark text-light" id="description" name="description" rows="5" placeholder="- 独特能力
+- 重要经历
+- 个人追求">{{ character.description if character else '' }}</textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="personality" class="form-label">性格特点</label>
+                        <textarea class="form-control bg-dark text-light" id="personality" name="personality" rows="3" placeholder="- 性格特征
+- 行为习惯
+- 处事方式">{{ character.personality if character else '' }}</textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="background" class="form-label">背景故事</label>
+                        <textarea class="form-control bg-dark text-light" id="background" name="background" rows="5" placeholder="- 成长经历
+- 重要事件
+- 人际关系
+- 职务职位">{{ character.background if character else '' }}</textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="relationships" class="form-label">与其他角色的关系</label>
+                        <textarea class="form-control bg-dark text-light" id="relationships" name="relationships" rows="3" placeholder="- 主角或配角
+- 与其他角色的历史关系
+- 与其他角色的当前关系
+- 与其他角色的未来关系
+- 与其他角色的冲突
+- 与其他角色的合作">{{ character.relationships if character else '' }}</textarea>
+                    </div>
+
+                    <div class="d-flex justify-content-between gap-2 mt-4">
+                        <button type="button" class="btn btn-outline-success" onclick="optimize()">AI优化</button>
+                        <button type="button" class="btn btn-primary ms-auto" onclick="save()">保存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+    <script>
+        // 声明变量
+        let isGenerating = false;
+        let abortController = null;
+        
+        // 显示加载动画
+        function showLoading() {
+            const overlay = document.getElementById('loading-overlay');
+            overlay.style.display = 'flex';
+        }
+        
+        // 隐藏加载动画
+        function hideLoading() {
+            const overlay = document.getElementById('loading-overlay');
+            overlay.style.display = 'none';
+        }
+        
+        // 设置中止功能
+        document.addEventListener('DOMContentLoaded', function() {
+            // 为加载图像添加点击事件
+            document.getElementById('loading-image').addEventListener('click', function() {
+                if (confirm('是否中止生成？')) {
+                    if (abortController) {
+                        abortController.abort();
+                        hideLoading();
+                    }
+                }
+            });
+        });
+
+        function getScriptId(){
+            return {{ script.id if script else 'null'}};
+        }
+        function getCharacterId(){
+            return {{ character.id if character else 'null'}};
+        }
+        // 保存
+        async function save() {
+            // 获取scriptId
+            const scriptId = getScriptId();
+            const characterId = getCharacterId();
+            
+            const formData = new FormData();
+            formData.append('name', document.getElementById('name').value);
+            formData.append('gender', document.getElementById('gender').value);
+            formData.append('age', document.getElementById('age').value);
+            formData.append('personality', document.getElementById('personality').value);
+            formData.append('relationships', document.getElementById('relationships').value);
+            formData.append('description', document.getElementById('description').value);
+            formData.append('background', document.getElementById('background').value);
+
+            // 使用正确的路由
+            const saveUrl = `/characters/${scriptId}/character/${characterId}/edit`;
+            
+            fetch(saveUrl, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(data => {
+                        throw new Error(data.message || '保存失败');
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    // 只显示成功消息，不进行页面跳转
+                    //alert(data.message);
+                } else {
+                    throw new Error(data.message || '保存失败');
+                }
+            })
+            .catch(error => {
+                alert('保存失败: ' + error.message);
+            });
+        }
+
+        // AI优化
+        async function optimize() {
+            if (isGenerating) {
+                alert('优化中，请等待');
+                return;
+            }
+
+            const name = document.getElementById('name').value;
+            const gender = document.getElementById('gender').value;
+            const age = document.getElementById('age').value;
+            const personality = document.getElementById('personality').value;
+            const relationships = document.getElementById('relationships').value;
+            const description = document.getElementById('description').value;
+            const background = document.getElementById('background').value;
+            
+            const scriptId = getScriptId();
+            const characterId = getCharacterId();
+            const jsonData = {
+                script_id: scriptId,
+                character_id: characterId,
+                field_name: 'character',
+                name: name,
+                gender: gender,
+                age: age,
+                personality: personality,
+                relationships: relationships,
+                description: description,
+                background: background,
+                additional_requirements: '无',
+                optimize: '_optimize'
+            };
+
+            try {
+                // 初始化生成状态和控制器
+                isGenerating = true;
+                abortController = new AbortController();
+
+                const validateResponse = await fetch('/api/validate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(jsonData)
+                });
+
+                const validateData = await validateResponse.json();
+                
+                if (!validateData.success || validateData.status !== 'validation_passed') {
+                    alert(validateData.message || '验证失败');
+                    return;
+                }
+
+                let generationPrompt = prompt('请输入生成提示:');
+                if (generationPrompt === null) {
+                    return;
+                }
+                if (generationPrompt === '') {
+                    generationPrompt = '无';
+                }
+                jsonData.additional_requirements = generationPrompt;
+
+                showLoading();
+
+                const generateResponse = await fetch('/api/optimize/character', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(jsonData),
+                    signal: abortController.signal
+                });
+                
+                const generateData = await generateResponse.json();
+                
+                if (generateData.success && generateData.status === 'generating_completed') {
+                    // 直接更新文本框内容，不刷新页面
+                    document.getElementById('description').value = generateData.data.description;
+                    document.getElementById('personality').value = generateData.data.personality;
+                    document.getElementById('background').value = generateData.data.background;
+                    document.getElementById('relationships').value = generateData.data.relationships;
+                    save();
+                } else {
+                    throw new Error(generateData.message || '生成失败');
+                }
+            } catch (error) {
+                alert('优化失败: ' + error.message);
+            } finally {
+                isGenerating = false;
+                abortController = null;
+                hideLoading();
+            }
+        }
+    </script>
+</body>
+</html> 

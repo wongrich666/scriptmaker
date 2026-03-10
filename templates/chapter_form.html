@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <title>{% if chapter %}编辑章节{% else %}新建章节{% endif %} - 剧本管理系统</title>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='bootstrap.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='dark-theme.css') }}">
+
+    <style>
+        /* PC端样式优化 */
+        @media (min-width: 768px) {
+            .container {
+                max-width: 1200px;
+            }
+            h1, h2, h3, h4, h5, h6 {
+                font-size: 1.2em;
+            }
+            .form-control {
+                font-size: 1rem;
+                padding: 0.75rem;
+            }
+            .btn {
+                font-size: 1rem;
+                padding: 0.75rem 1.5rem;
+            }
+        }
+        
+        /* 移动端样式 */
+        @media (max-width: 767px) {
+            h1, h2, h3, h4, h5, h6 {
+                font-size: 1em;
+            }
+            .form-control {
+                font-size: 16px; /* 防止iOS缩放 */
+                padding: 0.5rem;
+            }
+            .btn {
+                font-size: 1rem;
+                padding: 0.5rem 1rem;
+            }
+        }
+    </style>
+</head>
+<body class="bg-dark text-light">
+    <!-- 加载动画覆盖层 -->
+    <div id="loading-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); z-index: 9999; display: none; justify-content: center; align-items: center; flex-direction: column;">
+        <img src="{{ url_for('static', filename='media/loading.gif') }}" alt="加载中" style="max-width: 400px; cursor: pointer;" id="loading-image">
+    </div>
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <img src="{{ url_for('static', filename='icon.png') }}" alt="系统图标" height="30" class="d-inline-block align-text-top me-2">
+                剧本管理系统
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <span class="nav-link">{{ current_user.email }}</span>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('auth.logout') }}">退出</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container py-5">
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-danger">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>{% if chapter %}编辑章节{% else %}新建章节{% endif %}</h2>
+            <a href="javascript:window.history.back();" class="btn btn-outline-secondary">返回</a>
+        </div>
+
+        <div class="card bg-dark border-light">
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-2">
+                        <label for="number" class="form-label">章节号</label>
+                        <input type="number" class="form-control bg-dark text-light" id="number" name="number" value="{{ chapter.number }}" readonly>
+                    </div>
+                    <div class="col-md-10">
+                        <label for="title" class="form-label">标题</label>
+                        <input type="text" class="form-control bg-dark text-light" id="title" name="title" value="{{ chapter.title }}" required>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label for="chapter_outline" class="form-label">大纲</label>
+                    <textarea class="form-control bg-dark text-light" id="chapter_outline" name="chapter_outline" rows="10" required>{{ chapter.chapter_outline }}</textarea>
+                </div>
+                <div class="mb-3">
+                    <label for="chapter_content" class="form-label">内容</label>
+                    <textarea class="form-control bg-dark text-light" id="chapter_content" name="chapter_content" rows="10" required>{{ chapter.chapter_content }}</textarea>
+                </div>
+                <div class="mb-3">
+                    <label for="chapter_script" class="form-label">剧本</label>
+                    <textarea class="form-control bg-dark text-light" id="chapter_script" name="chapter_script" rows="10" required>{{ chapter.chapter_script }}</textarea>
+                </div>
+                <div class="d-flex justify-content-between gap-2 mt-4">
+                    <button type="button" class="btn btn-outline-success" onclick="generate('chapter_outline','_optimize')">优化大纲</button>
+                    <button type="button" class="btn btn-outline-success" onclick="generate('chapter_content','')">生成内容</button>
+                    <button type="button" class="btn btn-outline-success" onclick="generate('chapter_content','_optimize')">优化内容</button>
+                    <button type="button" class="btn btn-outline-success" onclick="generate('chapter_script','')">生成剧本</button>
+                    <button type="button" class="btn btn-outline-success" onclick="generate('chapter_script','_optimize')">优化剧本</button>
+                    <button type="button" class="btn btn-primary ms-auto" onclick="save()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+    <script>
+        // 声明变量
+        let isGenerating = false;
+        let abortController = null;
+        
+        // 显示加载动画
+        function showLoading() {
+            const overlay = document.getElementById('loading-overlay');
+            overlay.style.display = 'flex';
+        }
+        
+        // 隐藏加载动画
+        function hideLoading() {
+            const overlay = document.getElementById('loading-overlay');
+            overlay.style.display = 'none';
+        }
+        
+        // 设置中止功能
+        document.addEventListener('DOMContentLoaded', function() {
+            // 为加载图像添加点击事件
+            document.getElementById('loading-image').addEventListener('click', function() {
+                if (confirm('是否中止生成？')) {
+                    if (abortController) {
+                        abortController.abort();
+                        hideLoading();
+                    }
+                }
+            });
+        });
+
+        function getScriptId(){
+            return {{ script.id if script else 'null'}};
+        }
+        function getChapterId(){
+            return {{ chapter.id if chapter else 'null'}};
+        }
+
+        // 生成
+        async function generate(field_name, optimize='') {
+            if (isGenerating) {
+                alert('生成中，请等待');
+                return;
+            }
+
+            const number = document.getElementById('number').value;
+            const title = document.getElementById('title').value;
+            const chapter_outline = document.getElementById('chapter_outline').value;
+            const chapter_content = document.getElementById('chapter_content').value;
+            const chapter_script = document.getElementById('chapter_script').value;
+            
+            const scriptId = getScriptId();
+            const chapterId = getChapterId();
+            const jsonData = {
+                script_id: parseInt(scriptId),
+                chapter_id: parseInt(chapterId),
+                field_name: field_name,
+                outline: 'outline',
+                knowledge: 'knowledge',
+                background: 'background',
+                characters: 'characters',
+                write_style: 'write_style',
+                style: 'style',
+                title: title,
+                number: number,
+                chapter_outline: chapter_outline,
+                chapter_content: chapter_content,
+                chapter_script: chapter_script,
+                mind_map: '{}',
+                additional_requirements: '无',
+                optimize: optimize
+            };
+
+            try {
+                // 初始化生成状态和控制器
+                isGenerating = true;
+                abortController = new AbortController();
+
+                const validateResponse = await fetch('/api/validate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(jsonData)
+                });
+
+                const validateData = await validateResponse.json();
+                
+                if (!validateData.success || validateData.status !== 'validation_passed') {
+                    alert(validateData.message || '验证失败');
+                    return;
+                }
+
+                let generationPrompt = prompt('请输入生成提示:');
+                if (generationPrompt === null) {
+                    return;
+                }
+                if (generationPrompt === '') {
+                    generationPrompt = '无';
+                }
+                jsonData.additional_requirements = generationPrompt;
+
+                showLoading();
+
+                const generateResponse = await fetch('/api/generate/chapter', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(jsonData),
+                    signal: abortController.signal
+                });
+                
+                const generateData = await generateResponse.json();
+                
+                if (generateData.success && generateData.status === 'generating_completed') {
+                    // 直接更新文本框内容，不刷新页面
+                    document.getElementById(field_name).value = generateData.content;
+                    save();
+                } else {
+                    throw new Error(generateData.message || '生成失败');
+                }
+            } catch (error) {
+                alert('生成失败: ' + error.message);
+            } finally {
+                isGenerating = false;
+                abortController = null;
+                
+                // 隐藏加载动画
+                hideLoading();
+            }
+        }   
+
+        // 保存
+        function save() {
+            // 获取scriptId
+            const scriptId = getScriptId();
+            const chapterId = getChapterId();
+            
+            const formData = new FormData();
+            formData.append('number', document.getElementById('number').value);
+            formData.append('title', document.getElementById('title').value);
+            formData.append('chapter_outline', document.getElementById('chapter_outline').value);
+            formData.append('chapter_content', document.getElementById('chapter_content').value);
+            formData.append('chapter_script', document.getElementById('chapter_script').value);
+
+            // 使用正确的路由
+            const saveUrl = `/chapters/chapters/${chapterId}/edit`;
+            
+            fetch(saveUrl, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(data => {
+                        throw new Error(data.message || '保存失败');
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    // 只显示成功消息，不进行页面跳转
+                    //alert(data.message);
+                } else {
+                    throw new Error(data.message || '保存失败');
+                }
+            })
+            .catch(error => {
+                alert('保存失败: ' + error.message);
+            });
+        }
+    </script>
+</body>
+</html> 

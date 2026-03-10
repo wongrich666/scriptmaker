@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+	<title>欢迎 - 剧本管理系统</title>
+	<link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+	<link rel="stylesheet" href="{{ url_for('static', filename='bootstrap.min.css') }}">
+	<link rel="stylesheet" href="{{ url_for('static', filename='dark-theme.css') }}">
+	<style>
+		/* PC端样式优化 */
+		@media (min-width: 768px) {
+			.container {
+				max-width: 1200px;
+			}
+
+			h1 {
+				font-size: 2.5rem;
+			}
+
+			.btn-lg {
+				font-size: 1.1rem;
+				padding: 0.75rem 1.5rem;
+			}
+		}
+
+		/* 移动端样式 */
+		@media (max-width: 767px) {
+			h1 {
+				font-size: 1.8rem;
+			}
+
+			.btn-lg {
+				font-size: 1rem;
+				padding: 0.5rem 1rem;
+			}
+		}
+	</style>
+</head>
+
+<body class="bg-dark text-light">
+	<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+		<div class="container">
+			<a class="navbar-brand" href="#">
+				<img src="{{ url_for('static', filename='icon.png') }}" alt="系统图标" height="30"
+					class="d-inline-block align-text-top me-2">
+				剧本管理系统
+			</a>
+		</div>
+	</nav>
+
+	<div class="container py-5">
+		<div class="row">
+			<div class="col-md-6">
+				<video height="100%" autoplay loop muted playsinline>
+					<source src="{{ url_for('static', filename='media/视频.mp4') }}" type="video/mp4">
+					您的浏览器不支持视频播放。
+				</video>
+			</div>
+			<div class="col-md-6 text-center">
+				<h1 class="mb-4">欢迎使用剧本管理系统</h1>
+				<div class="d-grid gap-3">
+					<a href="{{ url_for('auth.login') }}" class="btn btn-primary btn-lg">登录</a>
+					<a href="{{ url_for('auth.register') }}" class="btn btn-outline-primary btn-lg">注册</a>
+				</div>
+			</div>
+		</div>
+	</div>
+</body>
+
+</html>
