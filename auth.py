@@ -209,71 +209,70 @@ def validate_username(username):
 def index():
     logging.debug(f"访问认证根路径，用户认证状态: {current_user.is_authenticated}")
     if current_user.is_authenticated:
-        logging.debug(f"用户已登录，重定向到仪表板")
-        return redirect(url_for('dashboard.index'))
-    logging.debug(f"用户未登录，重定向到登录页面")
+        logging.debug("用户已登录，重定向到聊天主页")
+        return redirect(url_for('chat.index'))
+    logging.debug("用户未登录，重定向到登录页面")
     return redirect(url_for('auth.login'))
 
 @auth.route('/login', methods=['GET', 'POST'])
 def login():
     logging.debug(f"访问登录页面，用户认证状态: {current_user.is_authenticated}")
     if current_user.is_authenticated:
-        logging.debug(f"用户已登录，重定向到仪表板")
-        return redirect(url_for('dashboard.index'))
-        
+        logging.debug("用户已登录，重定向到聊天主页")
+        return redirect(url_for('chat.index'))
+
     if request.method == 'POST':
         email = request.form.get('email')
         password = request.form.get('password')
-        
+
         if not validate_username(email):
             flash('无效的邮箱或手机号格式')
             return redirect(url_for('auth.login'))
-            
+
         user = UserModel.query.filter_by(email=email).first()
         if user and user.password_hash == hashlib.sha256(password.encode()).hexdigest():
             logging.debug(f"用户 {email} 登录成功")
-            # 清除旧的会话数据
             session.clear()
             login_user(user)
-            logging.debug(f"用户 {email} 已登录，重定向到菜单")
-            return redirect(url_for('menu.index'))
+            logging.debug(f"用户 {email} 已登录，重定向到聊天主页")
+            return redirect(url_for('chat.index'))
         else:
             flash('用户名或密码错误')
+
     return render_template('login.html')
 
 @auth.route('/register', methods=['GET', 'POST'])
 def register():
     logging.debug(f"访问注册页面，用户认证状态: {current_user.is_authenticated}")
     if current_user.is_authenticated:
-        logging.debug(f"用户已登录，重定向到仪表板")
-        return redirect(url_for('dashboard.index'))
-        
+        logging.debug("用户已登录，重定向到聊天主页")
+        return redirect(url_for('chat.index'))
+
     if request.method == 'POST':
         email = request.form.get('email')
         password = request.form.get('password')
-        
+
         if not validate_username(email):
             flash('无效的邮箱或手机号格式')
             return redirect(url_for('auth.register'))
-            
+
         if UserModel.query.filter_by(email=email).first():
             flash('该用户名已被注册')
             return redirect(url_for('auth.register'))
-            
+
         hashed_password = hashlib.sha256(password.encode()).hexdigest()
         new_user = UserModel(email)
         new_user.password_hash = hashed_password
         db.session.add(new_user)
         db.session.commit()
-        
-        # 注册成功后自动登录
+
         logging.debug(f"用户 {email} 注册成功，准备登录")
-        # 清除旧的会话数据
         session.clear()
         login_user(new_user)
-        logging.debug(f"用户 {email} 已登录，准备重定向")
+        logging.debug(f"用户 {email} 已登录，准备重定向到聊天主页")
         flash('注册成功')
-        return redirect(url_for('dashboard.index'))
+        return redirect(url_for('chat.index'))
+
     return render_template('register.html')
 
 @auth.route('/logout')
@@ -342,7 +341,7 @@ def check_wechat_scan():
             return jsonify({
                 'scanned': True,
                 'registered': True,
-                'redirect_url': url_for('menu.index')  # 直接跳转到菜单页面
+                'redirect_url': url_for('chat.index')  # 直接跳转到菜单页面
             })
         else:
             logging.debug(f"未找到用户: openid={openid}，尝试自动创建")
@@ -372,7 +371,7 @@ def check_wechat_scan():
                     'scanned': True,
                     'registered': True,
                     'message': '注册成功',
-                    'redirect_url': url_for('menu.index')  # 直接跳转到菜单页面
+                    'redirect_url': url_for('chat.index')  # 直接跳转到菜单页面
                 })
             except Exception as e:
                 logging.error(f"自动创建用户失败: {e}", exc_info=True)
@@ -447,7 +446,7 @@ def wechat_register_callback():
         # 微信用户已存在，直接登录
         login_user(user)
         flash('微信账号登录成功')
-        return redirect(url_for('dashboard.index'))
+        return redirect(url_for('chat.index'))
     else:
         # 创建新用户（使用微信信息）
         new_user = UserModel(f"wx_{wx_user_info['openid']}@wechat.user")
@@ -466,7 +465,7 @@ def wechat_register_callback():
         # 注册成功后自动登录
         login_user(new_user)
         flash('微信注册成功')
-        return redirect(url_for('dashboard.index'))
+        return redirect(url_for('chat.index'))
 
 def extract_scene_str(event_key):
     """
