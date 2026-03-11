@@ -306,6 +306,280 @@ def _post_openai_compatible(
 
     raise ValueError(f"{request_name} 调用失败：{last_err}")
 
+
+def _convert_messages_to_gemini_payload(messages):
+    """
+    把 OpenAI 风格 messages 转成 Gemini generateContent 所需格式：
+    - system -> systemInstruction
+    - user -> role=user
+    - assistant -> role=model
+    """
+    system_texts = []
+    contents = []
+
+    for msg in messages or []:
+        if not isinstance(msg, dict):
+            continue
+
+        role = (msg.get("role") or "user").strip().lower()
+        content = (msg.get("content") or "").strip()
+        if not content:
+            continue
+
+        if role == "system":
+            system_texts.append(content)
+        elif role == "assistant":
+            contents.append({
+                "role": "model",
+                "parts": [{"text": content}]
+            })
+        else:
+            contents.append({
+                "role": "user",
+                "parts": [{"text": content}]
+            })
+
+    system_instruction = None
+    if system_texts:
+        system_instruction = {
+            "parts": [{"text": "\n\n".join(system_texts)}]
+        }
+
+    # 如果只有 system，没有 user 内容，给一个兜底 user
+    if not contents:
+        contents = [{
+            "role": "user",
+            "parts": [{"text": "请根据系统指令执行。"}]
+        }]
+
+    return system_instruction, contents
+
+
+def _build_gemini_generate_content_url(host: str, model: str) -> str:
+    """
+    兼容几种 GEMINI_HOST 写法：
+    1. https://generativelanguage.googleapis.com/v1beta
+    2. https://generativelanguage.googleapis.com/v1beta/
+    3. https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent
+    4. 已经是完整 generateContent 地址
+    """
+    host = (host or "").strip()
+    if not host:
+        raise ValueError("Gemini HOST 未配置")
+
+    if "{model}" in host:
+        return host.format(model=model)
+
+    if host.endswith(":generateContent"):
+        return host
+
+    if host.endswith("/"):
+        host = host[:-1]
+
+    # 如果只是 v1beta 根地址，则自动补全
+    if host.endswith("/v1beta"):
+        return f"{host}/models/{model}:generateContent"
+
+    # 如果已经写到 models/xxx 但没带 generateContent
+    if f"/models/{model}" in host and not host.endswith(":generateContent"):
+        return f"{host}:generateContent"
+
+    # 兜底：按 base url 处理
+    return f"{host}/models/{model}:generateContent"
+
+
+def _post_standard_gemini(
+        host: str,
+        api_key: str,
+        model: str,
+        messages: list,
+        *,
+        temperature: float = 0.8,
+        max_tokens: int = 2000,
+        request_name: str = "Gemini"
+) -> str:
+    """
+    Gemini 官方 REST：models/{model}:generateContent
+    """
+    if not host:
+        raise ValueError(f"{request_name} HOST 未配置")
+    if not api_key:
+        raise ValueError(f"{request_name} API_KEY 未配置")
+    if not model:
+        raise ValueError(f"{request_name} MODEL 未配置")
+
+    url = _build_gemini_generate_content_url(host, model)
+    system_instruction, contents = _convert_messages_to_gemini_payload(messages)
+
+    payload = {
+        "contents": contents,
+        "generationConfig": {
+            "temperature": temperature,
+            "maxOutputTokens": max_tokens
+        }
+    }
+
+    if system_instruction:
+        payload["systemInstruction"] = system_instruction
+
+    headers = {
+        "Content-Type": "application/json",
+        "Connection": "close",
+    }
+
+    last_err = None
+
+    for attempt in range(1, 4):
+        try:
+            resp = _HTTP_SESSION.post(
+                url,
+                headers=headers,
+                params={"key": api_key},
+                json=payload,
+                timeout=(10, 180),
+            )
+
+            try:
+                data = resp.json()
+            except Exception:
+                data = None
+
+            if resp.status_code == 200:
+                if data is None:
+                    raise ValueError(f"{request_name} 返回200，但不是合法JSON")
+                return _extract_standard_gemini_text(data)
+
+            detail = ""
+            if isinstance(data, dict):
+                detail = (
+                    data.get("error", {}).get("message")
+                    or data.get("message")
+                    or data.get("detail")
+                    or ""
+                )
+            if not detail:
+                detail = resp.text[:500]
+
+            if resp.status_code == 400:
+                raise ValueError(f"{request_name} 请求参数错误：{detail}")
+            if resp.status_code == 401:
+                raise ValueError(f"{request_name} 鉴权失败，请检查 API Key：{detail}")
+            if resp.status_code == 403:
+                raise ValueError(f"{request_name} 权限不足或被拒绝：{detail}")
+            if resp.status_code == 429:
+                raise ValueError(f"{request_name} 请求过多或限流：{detail}")
+
+            raise ValueError(f"{request_name} 调用失败，HTTP {resp.status_code}：{detail}")
+
+        except ChunkedEncodingError as e:
+            last_err = e
+            if attempt < 3:
+                time.sleep(attempt)
+                continue
+            raise ValueError(f"{request_name} 响应被中断（ChunkedEncodingError）：{e}")
+
+        except RequestsConnectionError as e:
+            last_err = e
+            if attempt < 3:
+                time.sleep(attempt)
+                continue
+            raise ValueError(f"{request_name} 连接失败：{e}")
+
+        except RequestException as e:
+            last_err = e
+            if attempt < 3:
+                time.sleep(attempt)
+                continue
+            raise ValueError(f"{request_name} 网络请求异常：{e}")
+
+        except Exception:
+            raise
+
+    raise ValueError(f"{request_name} 调用失败：{last_err}")
+
+
+def _post_ollama(
+        host: str,
+        model: str,
+        messages: list,
+        *,
+        request_name: str = "Ollama"
+) -> str:
+    """
+    Ollama /api/chat
+    """
+    if not host:
+        raise ValueError(f"{request_name} HOST 未配置")
+    if not model:
+        raise ValueError(f"{request_name} MODEL 未配置")
+
+    payload = {
+        "model": model,
+        "messages": messages,
+        "stream": False
+    }
+
+    headers = {
+        "Content-Type": "application/json",
+        "Connection": "close",
+    }
+
+    last_err = None
+
+    for attempt in range(1, 4):
+        try:
+            resp = _HTTP_SESSION.post(
+                host,
+                headers=headers,
+                json=payload,
+                timeout=(10, 600),  # 本地 32b 允许更久一点
+            )
+
+            try:
+                data = resp.json()
+            except Exception:
+                data = None
+
+            if resp.status_code == 200:
+                if data is None:
+                    raise ValueError(f"{request_name} 返回200，但不是合法JSON")
+                return _extract_ollama_text(data)
+
+            detail = ""
+            if isinstance(data, dict):
+                detail = data.get("error") or data.get("message") or ""
+            if not detail:
+                detail = resp.text[:500]
+
+            raise ValueError(f"{request_name} 调用失败，HTTP {resp.status_code}：{detail}")
+
+        except ChunkedEncodingError as e:
+            last_err = e
+            if attempt < 3:
+                time.sleep(attempt)
+                continue
+            raise ValueError(f"{request_name} 响应被中断（ChunkedEncodingError）：{e}")
+
+        except RequestsConnectionError as e:
+            last_err = e
+            if attempt < 3:
+                time.sleep(attempt)
+                continue
+            raise ValueError(f"{request_name} 连接失败：{e}")
+
+        except RequestException as e:
+            last_err = e
+            if attempt < 3:
+                time.sleep(attempt)
+                continue
+            raise ValueError(f"{request_name} 网络请求异常：{e}")
+
+        except Exception:
+            raise
+
+    raise ValueError(f"{request_name} 调用失败：{last_err}")
+
+
 def _call_model(messages, current_api=None, temperature=0.7, max_tokens=8192):
     current_api = (current_api or API or '').strip().lower()
 

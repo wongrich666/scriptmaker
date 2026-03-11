@@ -130,6 +130,23 @@ function enableLegacyLinks(projectId) {
     });
 }
 
+async function safeReadJson(resp) {
+  const text = await resp.text();
+  const contentType = resp.headers.get("content-type") || "";
+
+  if (!contentType.includes("application/json")) {
+    throw new Error(
+      `接口没有返回 JSON。HTTP ${resp.status}，Content-Type: ${contentType}，前200字符：${text.slice(0, 200)}`
+    );
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    throw new Error(`JSON 解析失败：${e.message}；原始内容前200字符：${text.slice(0, 200)}`);
+  }
+}
+
 async function handleSend() {
     const message = messageInput ? messageInput.value.trim() : "";
     if (!message) {
@@ -165,7 +182,7 @@ async function handleSend() {
             body: JSON.stringify(payload)
         });
 
-        const data = await resp.json();
+        const data = await safeReadJson(resp);
 
         if (!resp.ok || !data.success) {
             throw new Error(data.message || data.error || "发送失败");
@@ -190,7 +207,7 @@ function startPollingTask(taskId) {
     pollingTimer = setInterval(async () => {
         try {
             const resp = await fetch(`${window.chatConfig.taskBaseUrl}${taskId}`);
-            const data = await resp.json();
+            const data = await safeReadJson(resp);
 
             if (!resp.ok || !data.success) {
                 throw new Error(data.message || "任务查询失败");
@@ -240,7 +257,7 @@ function startPollingTask(taskId) {
 
 async function loadArtifacts(projectId) {
     const resp = await fetch(`${window.chatConfig.projectBaseUrl}${projectId}/artifacts`);
-    const data = await resp.json();
+    const data = await safeReadJson(resp);
 
     if (!resp.ok || !data.success) {
         throw new Error(data.message || "加载结果失败");
@@ -254,7 +271,7 @@ async function loadArtifacts(projectId) {
 
 async function loadTrace(projectId) {
     const resp = await fetch(`${window.chatConfig.projectBaseUrl}${projectId}/trace`);
-    const data = await resp.json();
+    const data = await safeReadJson(resp);
 
     if (!resp.ok || !data.success) {
         throw new Error(data.message || "加载过程失败");
@@ -278,7 +295,7 @@ async function loadCurrentModel() {
 
     try {
         const resp = await fetch(window.chatConfig.modelCurrentUrl);
-        const data = await resp.json();
+        const data = await safeReadJson(resp);
 
         if (resp.ok && data.success) {
             const model = data.selected_model || "deepseek";
@@ -302,7 +319,7 @@ async function updateModel(model) {
             body: JSON.stringify({ model })
         });
 
-        const data = await resp.json();
+        const data = await safeReadJson(resp);
 
         if (!resp.ok || !data.success) {
             throw new Error(data.message || "模型切换失败");
