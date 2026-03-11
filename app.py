@@ -112,6 +112,12 @@ def create_app_with_blueprints():
 
             # 先放行 404 / 405 / 403 等 HTTP 错误
             if isinstance(e, HTTPException):
+                if request.path.startswith('/api/'):
+                    return jsonify({
+                        'success': False,
+                        'error': e.description,
+                        'code': e.code
+                    }), e.code
                 return e
 
             error_traceback = traceback.format_exc()
