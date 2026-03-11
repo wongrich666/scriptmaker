@@ -1,132 +1,6 @@
 # ============================================================
 # Chat MVP API（问题2）作用与操作说明
 # ============================================================
-#
-# 一、这组新增接口的作用
-#
-# 这 4 个接口是把原来“分散的生成按钮接口”，先整合成一个最小可用的
-# 聊天式创作流程入口，方便后面接聊天页前端。
-#
-# 1. POST /api/chat/send
-#    - 用户发一条消息，触发一次完整创作流程
-#    - 后端会：
-#      ① 识别输入模式（自由生成 / 参考换皮 / 框架创作）
-#      ② 创建 task_id 和 session_id
-#      ③ 启动后台线程执行流程
-#      ④ 返回任务状态
-#
-# 2. GET /api/task/<task_id>
-#    - 查询当前任务执行到哪一步
-#    - 可返回：
-#      pending / running / reviewing / retrying / done / failed
-#
-# 3. GET /api/project/<project_id>/artifacts
-#    - 获取本次创作的最终产物
-#    - 包括：
-#      最终剧本、人物设定、剧情大纲、审核报告、story_brief
-#
-# 4. GET /api/project/<project_id>/trace
-#    - 获取本次创作的过程摘要
-#    - 包括：
-#      总编剧拆解、人物编剧摘要、剧情编剧摘要、审核摘要
-#
-#
-# 二、当前这版的实现方式（MVP 特点）
-#
-# 1. 任务状态(task)和过程(trace)先存放在内存里：
-#    CHAT_TASK_STORE
-#
-# 2. 服务重启后，内存任务状态和 trace 会丢失
-#    - 这是 MVP 阶段允许的
-#    - 目的是先把聊天链路跑通
-#
-# 3. 虽然 task/trace 存在内存里，但主要结果会写回数据库：
-#    - ScriptModel.content
-#    - ScriptModel.outline
-#    - ScriptModel.characters
-#    - ScriptModel.background
-#    - ScriptModel.knowledge
-#    - ScriptModel.style / write_style
-#
-# 4. 这样做的意义是：
-#    - 即使 Flask 重启，最终剧本、人设、大纲仍然会保留
-#    - 旧页面（dashboard / chapters / characters）后续还能继续查看或编辑
-#
-#
-# 三、前端以后怎么接这组接口
-#
-# 聊天页前端只需要按这个顺序调用：
-#
-# 1. 先调 POST /api/chat/send
-#    - 提交用户输入
-#    - 拿到 task_id、session_id、mode
-#
-# 2. 然后轮询 GET /api/task/<task_id>
-#    - 看任务是否完成
-#
-# 3. 当 status == done 时：
-#    - 请求 GET /api/project/<project_id>/artifacts
-#    - 取最终剧本、人设、大纲、审核报告
-#
-# 4. 如果用户想看过程：
-#    - 请求 GET /api/project/<project_id>/trace
-#
-#
-# 四、目前这组接口内部的最小流程
-#
-# chat/send
-#   -> detect_mode()                # 判断输入模式
-#   -> _build_story_brief()         # 总编剧整理需求
-#   -> _generate_character_bible()  # 编剧A生成人设
-#   -> _generate_plot_outline()     # 编剧B生成剧情
-#   -> _review_artifacts()          # 审核报告
-#   -> 必要时自动回修一次
-#   -> _persist_artifacts_to_project() 写回 ScriptModel
-#
-#
-# 五、怎么测试（后端联调）
-#
-# 1. 重启 Flask
-#    停掉服务后重新执行：
-#
-#       python app.py
-#
-# 2. Postman 测 POST /api/chat/send
-#    地址：
-#
-#       http://127.0.0.1:60002/api/chat/send
-#
-#    Body 选 raw -> JSON，示例：
-#
-#       {
-#         "project_id": null,
-#         "message": "我要一个都市情感女频短剧，强调开头强钩子和连续反转",
-#         "meta": {
-#           "genre": "都市情感",
-#           "style": "女频短剧",
-#           "word_count": "80集",
-#           "reference_text": "",
-#           "framework_text": "",
-#           "banned": "不要失忆梗",
-#           "output_granularity": "outline"
-#         }
-#       }
-#
-# 3. 拿到 task_id 后，测任务状态：
-#
-#       GET http://127.0.0.1:60002/api/task/<task_id>
-#
-# 4. 拿到 project_id 后，测最终结果：
-#
-#       GET http://127.0.0.1:60002/api/project/<project_id>/artifacts
-#
-# 5. 查看过程摘要：
-#
-#       GET http://127.0.0.1:60002/api/project/<project_id>/trace
-#
-#
-# 六、注意事项
-#
 # 1. 这版是 MVP，不是最终版
 # 2. task / trace 暂时不落库
 # 3. 主要目的是先把聊天入口打通
@@ -134,21 +8,6 @@
 #    conversation_session / generation_task / agent_trace 等
 # 5. 后续也可以把“人物 / 剧情 / 审核”从 api.py 再拆到
 #    orchestrator/、agents/、review/、services/ 目录中
-#
-# 七、时间写法说明
-#
-# 如果看到 datetime.utcnow() 有 IDE 划线，这是因为它在 Python 3.12+
-# 已被标记为 deprecated。
-#
-# 推荐把：
-#    datetime.now(timezone.utc).isoformat()
-#
-# 改成：
-#    datetime.now(timezone.utc).isoformat()
-#
-# 并确保文件顶部导入：
-#    from datetime import datetime, timezone
-#
 # ============================================================
 import uuid
 import threading
@@ -312,6 +171,207 @@ def call_api(prompt):
     except Exception as e:
         print("Error parsing response:", str(e))
         raise Exception(f"解析API响应失败: {str(e)}")
+
+def _build_http_session():
+    """
+    构建更稳的 requests Session：
+    1. 忽略系统代理环境变量，避免莫名其妙走到坏掉的代理
+    2. 自动重试临时网络错误
+    3. 关闭长连接复用带来的脏连接问题
+    """
+    session = requests.Session()
+    session.trust_env = False  # 关键：忽略 HTTP_PROXY / HTTPS_PROXY / ALL_PROXY
+
+    retry = Retry(
+        total=3,
+        connect=3,
+        read=3,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=frozenset(["POST"]),
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session
+
+
+_HTTP_SESSION = _build_http_session()
+
+
+def _extract_openai_compatible_text(resp_json: dict) -> str:
+    """
+    兼容 DeepSeek / zenmux.ai 这类 OpenAI 风格返回：
+    {
+      "choices": [
+        {
+          "message": {
+            "content": "..."
+          }
+        }
+      ]
+    }
+    """
+    if not isinstance(resp_json, dict):
+        raise ValueError("API响应不是有效 JSON 对象")
+
+    choices = resp_json.get("choices")
+    if not choices or not isinstance(choices, list):
+        raise ValueError("API响应格式错误：未找到 choices 字段")
+
+    first = choices[0] or {}
+    message = first.get("message") or {}
+    content = message.get("content")
+
+    if content is None:
+        raise ValueError("API响应格式错误：未找到 message.content")
+
+    if isinstance(content, list):
+        # 有些兼容接口会返回分段结构
+        parts = []
+        for item in content:
+            if isinstance(item, dict):
+                txt = item.get("text")
+                if txt:
+                    parts.append(txt)
+        content = "".join(parts)
+
+    if not isinstance(content, str) or not content.strip():
+        raise ValueError("API返回内容为空")
+
+    return content.strip()
+
+
+def _post_openai_compatible(
+    host: str,
+    api_key: str,
+    model: str,
+    messages: list,
+    *,
+    temperature: float = 0.8,
+    max_tokens: int = 2000,
+    request_name: str = "LLM"
+) -> str:
+    """
+    统一的 OpenAI 兼容接口请求函数：
+    - DeepSeek 官方
+    - zenmux.ai 这类中转
+    """
+    if not host:
+        raise ValueError(f"{request_name} HOST 未配置")
+    if not api_key:
+        raise ValueError(f"{request_name} API_KEY 未配置")
+    if not model:
+        raise ValueError(f"{request_name} MODEL 未配置")
+
+    payload = {
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "stream": False,
+    }
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "Connection": "close",
+    }
+
+    last_err = None
+
+    for attempt in range(1, 4):
+        try:
+            resp = _HTTP_SESSION.post(
+                host,
+                headers=headers,
+                json=payload,
+                timeout=(10, 180),  # 连接超时10秒，读超时180秒
+            )
+
+            # 先尽量读 JSON；失败再回退到文本
+            try:
+                data = resp.json()
+            except Exception:
+                data = None
+
+            if resp.status_code == 200:
+                if data is None:
+                    raise ValueError(f"{request_name} 返回200，但不是合法JSON")
+                return _extract_openai_compatible_text(data)
+
+            # 常见余额 / 鉴权 / 限流报错尽量给清楚点
+            detail = ""
+            if isinstance(data, dict):
+                detail = (
+                    data.get("error", {}).get("message")
+                    or data.get("message")
+                    or data.get("detail")
+                    or ""
+                )
+            if not detail:
+                detail = resp.text[:500]
+
+            if resp.status_code == 401:
+                raise ValueError(f"{request_name} 鉴权失败，请检查 API Key：{detail}")
+            if resp.status_code == 402:
+                raise ValueError(f"{request_name} 余额不足：{detail}")
+            if resp.status_code == 429:
+                raise ValueError(f"{request_name} 请求过多或限流：{detail}")
+
+            raise ValueError(f"{request_name} 调用失败，HTTP {resp.status_code}：{detail}")
+
+        except ChunkedEncodingError as e:
+            last_err = e
+            if attempt < 3:
+                time.sleep(attempt)
+                continue
+            raise ValueError(f"{request_name} 响应被中断（ChunkedEncodingError）：{e}")
+
+        except ConnectionError as e:
+            last_err = e
+            if attempt < 3:
+                time.sleep(attempt)
+                continue
+            raise ValueError(f"{request_name} 连接失败：{e}")
+
+        except RequestException as e:
+            last_err = e
+            if attempt < 3:
+                time.sleep(attempt)
+                continue
+            raise ValueError(f"{request_name} 网络请求异常：{e}")
+
+        except Exception as e:
+            last_err = e
+            raise
+
+    raise ValueError(f"{request_name} 调用失败：{last_err}")
+
+
+def _call_deepseek(messages, temperature=0.8, max_tokens=2000):
+    return _post_openai_compatible(
+        host=DEEPSEEK_HOST,
+        api_key=DEEPSEEK_API_KEY,
+        model=DEEPSEEK_MODEL,
+        messages=messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        request_name="DeepSeek",
+    )
+
+
+def _call_gemini_compatible(messages, temperature=0.8, max_tokens=2000):
+    return _post_openai_compatible(
+        host=GEMINI_HOST,
+        api_key=GEMINI_API_KEY,
+        model=GEMINI_MODEL,
+        messages=messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        request_name="Gemini",
+    )
 
 def get_characters(script_id, character_id=0):
     """获取角色"""

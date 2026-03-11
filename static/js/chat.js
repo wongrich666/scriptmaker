@@ -4,20 +4,6 @@ let currentTaskId = null;
 let currentProjectId = null;
 let pollingTimer = null;
 
-let referenceTextState = "";
-let referenceSourceType = "";
-let referenceSourceName = "";
-
-const toggleReferenceBtn = document.getElementById("toggleReferenceBtn");
-const referencePanel = document.getElementById("referencePanel");
-
-const referenceUrlInput = document.getElementById("referenceUrlInput");
-const referenceFileInput = document.getElementById("referenceFileInput");
-const ingestUrlBtn = document.getElementById("ingestUrlBtn");
-const ingestFileBtn = document.getElementById("ingestFileBtn");
-
-const referenceStatusText = document.getElementById("referenceStatusText");
-const referencePreviewBox = document.getElementById("referencePreviewBox");
 const sendBtn = document.getElementById("sendBtn");
 const newChatBtn = document.getElementById("newChatBtn");
 
@@ -27,6 +13,7 @@ const wordCountInput = document.getElementById("wordCountInput");
 const projectIdText = document.getElementById("projectIdText");
 const taskIdText = document.getElementById("taskIdText");
 const taskStatusText = document.getElementById("taskStatusText");
+const currentModelText = document.getElementById("currentModelText");
 
 const finalScriptBox = document.getElementById("finalScriptBox");
 const characterBox = document.getElementById("characterBox");
@@ -42,31 +29,50 @@ const editScriptBtn = document.getElementById("editScriptBtn");
 const characterDetailBtn = document.getElementById("characterDetailBtn");
 const chapterDetailBtn = document.getElementById("chapterDetailBtn");
 
+const modelSelect = document.getElementById("modelSelect");
+
+// 标签切换
 document.querySelectorAll(".tab-btn").forEach(btn => {
     btn.addEventListener("click", () => {
         document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
         document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+
         btn.classList.add("active");
-        document.getElementById(`tab-${btn.dataset.tab}`).classList.add("active");
+        const target = document.getElementById(`tab-${btn.dataset.tab}`);
+        if (target) {
+            target.classList.add("active");
+        }
     });
 });
 
-newChatBtn.addEventListener("click", resetChatState);
-sendBtn.addEventListener("click", handleSend);
+// 绑定按钮
+if (newChatBtn) {
+    newChatBtn.addEventListener("click", resetChatState);
+}
+
+if (sendBtn) {
+    sendBtn.addEventListener("click", handleSend);
+}
+
+if (modelSelect) {
+    modelSelect.addEventListener("change", () => {
+        updateModel(modelSelect.value);
+    });
+}
 
 function resetChatState() {
     currentTaskId = null;
     currentProjectId = null;
 
-    projectIdText.textContent = "未创建";
-    taskIdText.textContent = "未开始";
-    taskStatusText.textContent = "空闲";
+    if (projectIdText) projectIdText.textContent = "未创建";
+    if (taskIdText) taskIdText.textContent = "未开始";
+    if (taskStatusText) taskStatusText.textContent = "空闲";
 
-    finalScriptBox.textContent = "暂无内容";
-    characterBox.textContent = "暂无内容";
-    outlineBox.textContent = "暂无内容";
-    reviewBox.textContent = "暂无内容";
-    traceBox.textContent = "暂无内容";
+    if (finalScriptBox) finalScriptBox.textContent = "暂无内容";
+    if (characterBox) characterBox.textContent = "暂无内容";
+    if (outlineBox) outlineBox.textContent = "暂无内容";
+    if (reviewBox) reviewBox.textContent = "暂无内容";
+    if (traceBox) traceBox.textContent = "暂无内容";
 
     disableLegacyLinks();
 
@@ -77,6 +83,8 @@ function resetChatState() {
 }
 
 function addMessage(role, text) {
+    if (!messageList) return;
+
     const wrap = document.createElement("div");
     wrap.className = `message ${role}`;
 
@@ -97,17 +105,18 @@ function disableLegacyLinks() {
         characterDetailBtn,
         chapterDetailBtn
     ].forEach(a => {
+        if (!a) return;
         a.classList.add("disabled");
         a.href = "#";
     });
 }
 
 function enableLegacyLinks(projectId) {
-    storyExportBtn.href = `/dashboard/script/${projectId}/export_story_txt`;
-    scriptExportBtn.href = `/dashboard/script/${projectId}/export_script_txt`;
-    editScriptBtn.href = `/dashboard/script/${projectId}/edit?tab=basic`;
-    characterDetailBtn.href = `/dashboard/script/${projectId}/edit?tab=characters`;
-    chapterDetailBtn.href = `/chapters/script/${projectId}/chapters`;
+    if (storyExportBtn) storyExportBtn.href = `/dashboard/script/${projectId}/export_story_txt`;
+    if (scriptExportBtn) scriptExportBtn.href = `/dashboard/script/${projectId}/export_script_txt`;
+    if (editScriptBtn) editScriptBtn.href = `/dashboard/script/${projectId}/edit?tab=basic`;
+    if (characterDetailBtn) characterDetailBtn.href = `/dashboard/script/${projectId}/edit?tab=characters`;
+    if (chapterDetailBtn) chapterDetailBtn.href = `/chapters/script/${projectId}/chapters`;
 
     [
         storyExportBtn,
@@ -115,23 +124,26 @@ function enableLegacyLinks(projectId) {
         editScriptBtn,
         characterDetailBtn,
         chapterDetailBtn
-    ].forEach(a => a.classList.remove("disabled"));
+    ].forEach(a => {
+        if (!a) return;
+        a.classList.remove("disabled");
+    });
 }
 
 async function handleSend() {
-    const message = messageInput.value.trim();
+    const message = messageInput ? messageInput.value.trim() : "";
     if (!message) {
         alert("请填写“用户输入”");
         return;
     }
 
-    let wordCountWan = parseFloat(wordCountInput.value);
+    let wordCountWan = wordCountInput ? parseFloat(wordCountInput.value) : DEFAULT_WORD_COUNT_WAN;
     if (Number.isNaN(wordCountWan) || wordCountWan <= 0) {
         wordCountWan = DEFAULT_WORD_COUNT_WAN;
-        wordCountInput.value = DEFAULT_WORD_COUNT_WAN;
+        if (wordCountInput) wordCountInput.value = DEFAULT_WORD_COUNT_WAN;
     }
 
-    sendBtn.disabled = true;
+    if (sendBtn) sendBtn.disabled = true;
 
     addMessage("user", `【字数】${wordCountWan}万字\n【需求】${message}`);
     addMessage("system", "正在创建任务，请稍候……");
@@ -140,10 +152,7 @@ async function handleSend() {
         project_id: currentProjectId,
         message: message,
         meta: {
-            word_count_wan: wordCountWan,
-            reference_text: referenceTextState,
-            reference_source_type: referenceSourceType,
-            reference_source_name: referenceSourceName
+            word_count_wan: wordCountWan
         }
     };
 
@@ -163,13 +172,13 @@ async function handleSend() {
         }
 
         currentTaskId = data.task_id;
-        taskIdText.textContent = data.task_id || "未返回";
-        taskStatusText.textContent = data.status || "pending";
+        if (taskIdText) taskIdText.textContent = data.task_id || "未返回";
+        if (taskStatusText) taskStatusText.textContent = data.status || "pending";
 
         startPollingTask(currentTaskId);
     } catch (err) {
         addMessage("system", `发送失败：${err.message}`);
-        sendBtn.disabled = false;
+        if (sendBtn) sendBtn.disabled = false;
     }
 }
 
@@ -187,21 +196,23 @@ function startPollingTask(taskId) {
                 throw new Error(data.message || "任务查询失败");
             }
 
-            taskStatusText.textContent = `${data.status} / ${data.current_stage}`;
+            if (taskStatusText) {
+                taskStatusText.textContent = `${data.status} / ${data.current_stage}`;
+            }
 
             if (data.project_id) {
                 currentProjectId = data.project_id;
-                projectIdText.textContent = currentProjectId;
+                if (projectIdText) projectIdText.textContent = currentProjectId;
             }
 
-            if (data.task_id) {
+            if (data.task_id && taskIdText) {
                 taskIdText.textContent = data.task_id;
             }
 
             if (data.status === "done") {
                 clearInterval(pollingTimer);
                 pollingTimer = null;
-                sendBtn.disabled = false;
+                if (sendBtn) sendBtn.disabled = false;
 
                 addMessage("system", "任务已完成，正在加载结果……");
 
@@ -215,13 +226,13 @@ function startPollingTask(taskId) {
             if (data.status === "failed") {
                 clearInterval(pollingTimer);
                 pollingTimer = null;
-                sendBtn.disabled = false;
+                if (sendBtn) sendBtn.disabled = false;
                 addMessage("system", `任务失败：${data.error || "未知错误"}`);
             }
         } catch (err) {
             clearInterval(pollingTimer);
             pollingTimer = null;
-            sendBtn.disabled = false;
+            if (sendBtn) sendBtn.disabled = false;
             addMessage("system", `轮询失败：${err.message}`);
         }
     }, 2000);
@@ -235,10 +246,10 @@ async function loadArtifacts(projectId) {
         throw new Error(data.message || "加载结果失败");
     }
 
-    finalScriptBox.textContent = data.final_script || "暂无最终剧本";
-    characterBox.textContent = data.character_bible || "暂无人物设定";
-    outlineBox.textContent = data.plot_outline || "暂无剧情大纲";
-    reviewBox.textContent = data.review_report || "暂无审核报告";
+    if (finalScriptBox) finalScriptBox.textContent = data.final_script || "暂无最终剧本";
+    if (characterBox) characterBox.textContent = data.character_bible || "暂无人物设定";
+    if (outlineBox) outlineBox.textContent = data.plot_outline || "暂无剧情大纲";
+    if (reviewBox) reviewBox.textContent = data.review_report || "暂无审核报告";
 }
 
 async function loadTrace(projectId) {
@@ -259,112 +270,20 @@ async function loadTrace(projectId) {
         ].join("\n");
     }).join("\n");
 
-    traceBox.textContent = traceText || "暂无生成过程";
+    if (traceBox) traceBox.textContent = traceText || "暂无生成过程";
 }
-
-toggleReferenceBtn.addEventListener("click", () => {
-    referencePanel.classList.toggle("hidden");
-});
-
-document.querySelectorAll(".ref-tab-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-        document.querySelectorAll(".ref-tab-btn").forEach(b => b.classList.remove("active"));
-        document.querySelectorAll(".ref-tab-content").forEach(c => c.classList.remove("active"));
-        btn.classList.add("active");
-        document.getElementById(`ref-tab-${btn.dataset.refTab}`).classList.add("active");
-    });
-});
-
-ingestUrlBtn.addEventListener("click", ingestReferenceUrl);
-ingestFileBtn.addEventListener("click", ingestReferenceFile);
-
-async function ingestReferenceUrl() {
-    const url = referenceUrlInput.value.trim();
-    if (!url) {
-        alert("请先输入网页链接");
-        return;
-    }
-
-    referenceStatusText.textContent = "读取中...";
-    referencePreviewBox.textContent = "正在抓取网页正文，请稍候...";
-
-    try {
-        const resp = await fetch("/api/reference/ingest", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                type: "url",
-                url: url
-            })
-        });
-
-        const data = await resp.json();
-        if (!resp.ok || !data.success) {
-            throw new Error(data.message || data.error || "网页读取失败");
-        }
-
-        referenceTextState = data.reference_text || "";
-        referenceSourceType = "url";
-        referenceSourceName = data.source_name || url;
-
-        referenceStatusText.textContent = `已加载：${referenceSourceName}`;
-        referencePreviewBox.textContent = referenceTextState || "未提取到正文";
-    } catch (err) {
-        referenceStatusText.textContent = "读取失败";
-        referencePreviewBox.textContent = `错误：${err.message}`;
-    }
-}
-
-async function ingestReferenceFile() {
-    const file = referenceFileInput.files[0];
-    if (!file) {
-        alert("请先选择文件");
-        return;
-    }
-
-    const formData = new FormData();
-    formData.append("type", "file");
-    formData.append("file", file);
-
-    referenceStatusText.textContent = "读取中...";
-    referencePreviewBox.textContent = "正在解析文件，请稍候...";
-
-    try {
-        const resp = await fetch("/api/reference/ingest", {
-            method: "POST",
-            body: formData
-        });
-
-        const data = await resp.json();
-        if (!resp.ok || !data.success) {
-            throw new Error(data.message || data.error || "文件读取失败");
-        }
-
-        referenceTextState = data.reference_text || "";
-        referenceSourceType = "file";
-        referenceSourceName = data.source_name || file.name;
-
-        referenceStatusText.textContent = `已加载：${referenceSourceName}`;
-        referencePreviewBox.textContent = referenceTextState || "未提取到正文";
-    } catch (err) {
-        referenceStatusText.textContent = "读取失败";
-        referencePreviewBox.textContent = `错误：${err.message}`;
-    }
-}
-
-const modelSelect = document.getElementById("modelSelect");
-const currentModelText = document.getElementById("currentModelText");
 
 async function loadCurrentModel() {
+    if (!window.chatConfig.modelCurrentUrl) return;
+
     try {
         const resp = await fetch(window.chatConfig.modelCurrentUrl);
         const data = await resp.json();
+
         if (resp.ok && data.success) {
             const model = data.selected_model || "deepseek";
-            modelSelect.value = model;
-            currentModelText.textContent = model;
+            if (modelSelect) modelSelect.value = model;
+            if (currentModelText) currentModelText.textContent = model;
         }
     } catch (err) {
         console.error("加载当前模型失败：", err);
@@ -372,6 +291,8 @@ async function loadCurrentModel() {
 }
 
 async function updateModel(model) {
+    if (!window.chatConfig.modelSelectUrl) return;
+
     try {
         const resp = await fetch(window.chatConfig.modelSelectUrl, {
             method: "POST",
@@ -380,70 +301,30 @@ async function updateModel(model) {
             },
             body: JSON.stringify({ model })
         });
+
         const data = await resp.json();
+
         if (!resp.ok || !data.success) {
             throw new Error(data.message || "模型切换失败");
         }
-        currentModelText.textContent = data.selected_model;
+
+        if (currentModelText) currentModelText.textContent = data.selected_model;
     } catch (err) {
         alert(`模型切换失败：${err.message}`);
     }
 }
-
-modelSelect.addEventListener("change", () => {
-    updateModel(modelSelect.value);
-});
-
-const modelSelect = document.getElementById("modelSelect");
-const currentModelText = document.getElementById("currentModelText");
-
-async function loadCurrentModel() {
-    try {
-        const resp = await fetch(window.chatConfig.modelCurrentUrl);
-        const data = await resp.json();
-        if (resp.ok && data.success) {
-            const model = data.selected_model || "deepseek";
-            modelSelect.value = model;
-            currentModelText.textContent = model;
-        }
-    } catch (err) {
-        console.error("加载当前模型失败：", err);
-    }
-}
-
-async function updateModel(model) {
-    try {
-        const resp = await fetch(window.chatConfig.modelSelectUrl, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ model })
-        });
-        const data = await resp.json();
-        if (!resp.ok || !data.success) {
-            throw new Error(data.message || "模型切换失败");
-        }
-        currentModelText.textContent = data.selected_model;
-    } catch (err) {
-        alert(`模型切换失败：${err.message}`);
-    }
-}
-
-modelSelect.addEventListener("change", () => {
-    updateModel(modelSelect.value);
-});
 
 function initSplitters() {
     const app = document.getElementById("chatApp");
     const leftSplitter = document.getElementById("leftSplitter");
     const rightSplitter = document.getElementById("rightSplitter");
 
+    if (!app || !leftSplitter || !rightSplitter) return;
+
     let isDraggingLeft = false;
     let isDraggingRight = false;
-
-    let leftWidth = 260;
-    let rightWidth = 420;
+    let leftWidth = 240;
+    let rightWidth = 440;
 
     function applyLayout() {
         app.style.gridTemplateColumns = `${leftWidth}px 6px 1fr 6px ${rightWidth}px`;
@@ -474,10 +355,15 @@ function initSplitters() {
 
         if (isDraggingRight) {
             const totalWidth = window.innerWidth;
-            rightWidth = Math.max(300, Math.min(700, totalWidth - e.clientX));
+            rightWidth = Math.max(320, Math.min(760, totalWidth - e.clientX));
             applyLayout();
         }
     });
 
     applyLayout();
 }
+
+window.addEventListener("DOMContentLoaded", () => {
+    loadCurrentModel();
+    initSplitters();
+});
