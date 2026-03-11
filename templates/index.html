@@ -13,7 +13,7 @@
     <aside class="sidebar">
         <div class="sidebar-header">
             <h2>ScriptMaker</h2>
-            <p>对话式创作入口</p>
+            <p>内部剧本创作入口</p>
         </div>
 
         <div class="sidebar-section">
@@ -27,7 +27,7 @@
         </div>
 
         <div class="sidebar-section">
-            <h3>当前项目</h3>
+            <h3>当前任务</h3>
             <div id="projectInfo">
                 <div>project_id：<span id="projectIdText">未创建</span></div>
                 <div>task_id：<span id="taskIdText">未开始</span></div>
@@ -40,69 +40,75 @@
     <main class="main-panel">
         <header class="main-header">
             <h1>剧本创作智能体</h1>
-            <p>输入需求，系统自动生成：人设 / 剧情 / 审核报告 / 最终结果</p>
+            <p>只需要填写字数和需求描述，系统会自动分析题材、风格和创作模式</p>
         </header>
 
-        <!-- 规范输入说明 -->
+        <!-- 输入规范 -->
         <section class="rule-box">
-            <h3>推荐输入规则（内部使用）</h3>
+            <h3>输入规则（内部使用）</h3>
             <ol>
-                <li>至少写明：<strong>题材 + 风格 + 集数/字数 + 核心冲突</strong></li>
-                <li>主分类和风格标签支持<strong>多选</strong>，请优先使用平台内置标签</li>
-                <li>有参考作品就填“参考内容”，会触发换皮模式</li>
-                <li>有明确设定骨架就填“框架内容”，会触发框架创作模式</li>
-                <li>禁止项请写清楚不要出现的桥段或设定</li>
-                <li>如果不填写字数/集数，系统默认按<strong>短篇小说</strong>处理</li>
+                <li>请至少写清楚：<strong>题材倾向 + 核心冲突 + 你想看的感觉</strong></li>
+                <li>如果你只写很少，系统会自动补全分类、风格和创作方向</li>
+                <li>如果你写得很详细，系统会优先按你的描述执行</li>
+                <li>字数默认按<strong>短篇小说</strong>处理，你也可以自行调整</li>
+                <li>这是内部系统，不追求“随便乱输也全懂”，请尽量写规范需求</li>
             </ol>
         </section>
 
         <section id="messageList" class="message-list">
             <div class="message system">
                 <div class="bubble">
-                    你好，请告诉我你想写什么题材、风格、字数/集数、故事梗概。<br>
-                    你也可以先选主分类和风格标签，再补一句核心需求。
+                    你好，请输入你的创作需求。<br>
+                    例如：写一个都市玄幻女频短篇，开头必须强冲突，女主背着巨大秘密进入豪门。<br>
+                    如果你写得很少，我会自动补全分类、风格和创作方向。
                 </div>
             </div>
         </section>
 
-        <section class="composer">
-            <div class="composer-fields">
-                <textarea id="messageInput" placeholder="请输入你的剧本需求，例如：我要一个都市+玄幻仙侠的女频短剧，默认短篇体量，开头必须强冲突，主角背负巨大秘密。"></textarea>
-            </div>
-
-            <details class="meta-panel" open>
-                <summary>展开高级参数</summary>
-
-                <!-- 主分类 -->
-                <div class="meta-block">
-                    <div class="meta-label">主分类（可多选）</div>
-                    <div id="mainCategoryContainer" class="chip-group"></div>
+        <div class="reference-tools">
+            <button id="toggleReferenceBtn" type="button" class="link-btn">添加参考素材</button>
+            <div id="referencePanel" class="reference-panel hidden">
+                <div class="reference-tabs">
+                    <button type="button" class="ref-tab-btn active" data-ref-tab="url">网页链接</button>
+                    <button type="button" class="ref-tab-btn" data-ref-tab="file">上传文件</button>
                 </div>
 
-                <!-- 风格标签 -->
-                <div class="meta-block">
-                    <div class="meta-label">风格标签（可多选）</div>
-                    <div class="subtab-bar">
-                        <button type="button" class="subtab-btn active" data-style-tab="theme">主题</button>
-                        <button type="button" class="subtab-btn" data-style-tab="character">角色</button>
-                        <button type="button" class="subtab-btn" data-style-tab="plot">情节</button>
+                <div id="ref-tab-url" class="ref-tab-content active">
+                    <div class="field-column">
+                        <label for="referenceUrlInput">网页链接</label>
+                        <input id="referenceUrlInput" type="url" placeholder="请输入参考网页地址，例如：https://xxx.com/article/123">
+                        <button id="ingestUrlBtn" type="button" class="secondary-btn">读取网页正文</button>
                     </div>
-
-                    <div id="themeTagContainer" class="chip-group style-tab-panel active"></div>
-                    <div id="characterTagContainer" class="chip-group style-tab-panel"></div>
-                    <div id="plotTagContainer" class="chip-group style-tab-panel"></div>
                 </div>
 
-                <!-- 其他参数 -->
-                <div class="meta-grid">
-                    <input id="customStyleInput" type="text" placeholder="补充风格说明（选填，如：偏电影感、偏快节奏、偏番茄爽感）">
-                    <input id="wordCountInput" type="text" value="2万字以内（短篇）" placeholder="字数/集数（默认：2万字以内（短篇））">
-                    <input id="outputGranularityInput" type="text" value="outline" placeholder="输出粒度（outline / script）">
-                    <textarea id="referenceTextInput" placeholder="参考内容（触发换皮模式）"></textarea>
-                    <textarea id="frameworkTextInput" placeholder="框架内容（触发框架创作模式）"></textarea>
-                    <textarea id="bannedInput" placeholder="禁止项（如：不要失忆梗 / 不要系统流 / 不要无脑误会）"></textarea>
+                <div id="ref-tab-file" class="ref-tab-content">
+                    <div class="field-column">
+                        <label for="referenceFileInput">上传参考文件</label>
+                        <input id="referenceFileInput" type="file" accept=".pdf,.txt,.md">
+                        <button id="ingestFileBtn" type="button" class="secondary-btn">读取文件内容</button>
+                    </div>
                 </div>
-            </details>
+
+                <div class="reference-status">
+                    <div>参考素材状态：<span id="referenceStatusText">未加载</span></div>
+                    <pre id="referencePreviewBox">暂无参考内容</pre>
+                </div>
+            </div>
+        </div>
+
+        <section class="composer">
+            <div class="simple-form">
+                <div class="field-row">
+                    <label for="wordCountInput">字数（万字）</label>
+                    <input id="wordCountInput" type="number" min="0.5" max="20" step="0.5" value="2">
+                    <span class="field-tip">默认 2 万字（短篇小说）</span>
+                </div>
+
+                <div class="field-column">
+                    <label for="messageInput">用户输入</label>
+                    <textarea id="messageInput" placeholder="请输入你的剧本需求，例如：写一个都市玄幻女频故事，开头要强冲突，女主隐藏身份进入豪门，在现代都市里逐步卷入超自然势力争斗。"></textarea>
+                </div>
+            </div>
 
             <div class="composer-actions">
                 <button id="sendBtn" class="primary-btn">发送需求</button>

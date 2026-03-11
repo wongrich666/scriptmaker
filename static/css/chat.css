@@ -110,100 +110,53 @@ body {
     background: #090b10;
 }
 
-.composer textarea {
-    width: 100%;
-    resize: vertical;
-    min-height: 110px;
+.simple-form {
+    display: grid;
+    gap: 14px;
+}
+
+.field-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.field-row label,
+.field-column label {
+    font-size: 14px;
+    font-weight: bold;
+    color: #dbe3f0;
+}
+
+.field-row input[type="number"] {
+    width: 120px;
     border: 1px solid #313949;
-    border-radius: 10px;
-    padding: 12px;
+    border-radius: 8px;
+    padding: 10px;
     font-size: 14px;
     background: #1b1f27;
     color: #f5f6fa;
 }
 
-.meta-panel {
-    margin-top: 12px;
-    background: #11141b;
-    border: 1px solid #2a3346;
-    border-radius: 10px;
-    padding: 12px;
-}
-
-.meta-block {
-    margin-top: 12px;
-}
-
-.meta-label {
-    font-size: 14px;
-    font-weight: bold;
-    margin-bottom: 10px;
-    color: #dbe3f0;
-}
-
-.chip-group {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-}
-
-.chip {
-    border: 1px solid #343d4f;
-    background: #1b1f27;
-    color: #dbe3f0;
-    border-radius: 999px;
-    padding: 8px 14px;
-    cursor: pointer;
+.field-tip {
+    color: #9aa3b2;
     font-size: 13px;
 }
 
-.chip.selected {
-    background: #2b1a10;
-    border-color: #d97b2d;
-    color: #ffb36a;
-}
-
-.subtab-bar {
+.field-column {
     display: flex;
+    flex-direction: column;
     gap: 8px;
-    margin-bottom: 10px;
 }
 
-.subtab-btn {
-    padding: 8px 12px;
-    border: 1px solid #343d4f;
-    border-radius: 8px;
-    background: #171c25;
-    color: #dbe3f0;
-    cursor: pointer;
-}
-
-.subtab-btn.active {
-    background: #6a2d0f;
-    border-color: #b95d22;
-    color: #ffb36a;
-}
-
-.style-tab-panel {
-    display: none;
-}
-
-.style-tab-panel.active {
-    display: flex;
-}
-
-.meta-grid {
-    display: grid;
-    gap: 10px;
-    margin-top: 12px;
-}
-
-.meta-grid input,
-.meta-grid textarea {
+.composer textarea {
     width: 100%;
+    resize: vertical;
+    min-height: 160px;
     border: 1px solid #313949;
-    border-radius: 8px;
-    padding: 10px;
+    border-radius: 10px;
+    padding: 12px;
     font-size: 14px;
     background: #1b1f27;
     color: #f5f6fa;
@@ -305,4 +258,70 @@ pre {
     .chat-app {
         grid-template-columns: 220px 1fr 360px;
     }
+}
+
+.reference-tools {
+    margin-bottom: 14px;
+}
+
+.reference-panel {
+    margin-top: 10px;
+    padding: 12px;
+    border: 1px solid #2a3346;
+    border-radius: 10px;
+    background: #11141b;
+}
+
+.reference-panel.hidden {
+    display: none;
+}
+
+.reference-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.ref-tab-btn {
+    padding: 8px 12px;
+    border: 1px solid #343d4f;
+    border-radius: 8px;
+    background: #121722;
+    color: #dbe3f0;
+    cursor: pointer;
+}
+
+.ref-tab-btn.active {
+    background: #2563eb;
+    color: #fff;
+    border-color: #2563eb;
+}
+
+.ref-tab-content {
+    display: none;
+}
+
+.ref-tab-content.active {
+    display: block;
+}
+
+.secondary-btn {
+    background: #1f4fd6;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 9px 14px;
+    cursor: pointer;
+    margin-top: 10px;
+    width: fit-content;
+}
+
+.reference-status {
+    margin-top: 14px;
+}
+
+.reference-status pre {
+    min-height: 120px;
+    max-height: 220px;
+    overflow-y: auto;
 }

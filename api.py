@@ -166,6 +166,10 @@ from urllib.parse import urlparse
 from models import CharacterModel, ChapterModel, ScriptModel, db
 from flask import Blueprint, request, jsonify, session
 from flask_login import login_required, current_user
+from io import BytesIO
+from werkzeug.utils import secure_filename
+from bs4 import BeautifulSoup
+from pypdf import PdfReader
 
 api = Blueprint('api', __name__)
 
@@ -184,6 +188,9 @@ DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 GEMINI_MODEL = os.getenv('GEMINI_MODEL')
 GEMINI_HOST = os.getenv('GEMINI_HOST')
+
+ALLOWED_REFERENCE_EXTENSIONS = {"pdf", "txt", "md"}
+MAX_REFERENCE_TEXT_CHARS = 20000
 
 def parse_template_fields(template):
     """解析模板中的字段"""
@@ -859,7 +866,7 @@ def validate_content():
 # =========================
 # 任务内存存储（MVP 版）
 # 注意：这是内存存储，服务重启后会丢失
-DEFAULT_WORD_COUNT = "2万字以内（短篇）"
+DEFAULT_WORD_COUNT = "2"
 CHAT_TASK_STORE = {}
 CHAT_TASK_LOCK = threading.Lock()
 
@@ -903,10 +910,20 @@ def _normalize_tag_list(value):
     return result
 
 
-def _normalize_word_count(value):
-    """用户不填时，默认按短篇小说处理"""
-    text = (value or "").strip()
-    return text if text else DEFAULT_WORD_COUNT
+def _normalize_word_count_wan(value):
+    try:
+        v = float(value)
+        if v <= 0:
+            return DEFAULT_WORD_COUNT
+        return v
+    except Exception:
+        return DEFAULT_WORD_COUNT
+
+
+def _format_word_count_text(word_count_wan):
+    if word_count_wan <= 0:
+        word_count_wan = DEFAULT_WORD_COUNT
+    return f"{word_count_wan}万字"
 
 
 def _detect_input_mode(message, meta):
@@ -927,26 +944,9 @@ def _detect_input_mode(message, meta):
 
 
 def _build_story_brief(message, meta, mode, user_id, project_id=None):
-    """总编剧：统一整理需求书"""
+    """总编剧：统一整理需求书（前端极简输入版）"""
 
-    main_categories = _normalize_tag_list(meta.get("main_categories"))
-    theme_tags = _normalize_tag_list(meta.get("theme_tags"))
-    character_tags = _normalize_tag_list(meta.get("character_tags"))
-    plot_tags = _normalize_tag_list(meta.get("plot_tags"))
-    style_tags = _normalize_tag_list(meta.get("style_tags"))
-
-    # 兼容旧字段
-    legacy_genre = (meta.get("genre") or "").strip()
-    legacy_style = (meta.get("style") or "").strip()
-
-    if not main_categories and legacy_genre:
-        main_categories = _normalize_tag_list(legacy_genre)
-
-    if not style_tags and legacy_style:
-        style_tags = _normalize_tag_list(legacy_style)
-
-    genre_text = "、".join(main_categories) if main_categories else "未指定"
-    style_text = "、".join(style_tags) if style_tags else (legacy_style or "未指定")
+    word_count_wan = _normalize_word_count_wan(meta.get("word_count_wan"))
 
     return {
         "project_id": project_id,
@@ -954,22 +954,23 @@ def _build_story_brief(message, meta, mode, user_id, project_id=None):
         "mode": mode,
         "user_message": (message or "").strip(),
 
-        # 结构化字段
-        "main_categories": main_categories,
-        "theme_tags": theme_tags,
-        "character_tags": character_tags,
-        "plot_tags": plot_tags,
-        "style_tags": style_tags,
+        # 当前前端只保留这一个结构化参数
+        "word_count_wan": word_count_wan,
+        "word_count": _format_word_count_text(word_count_wan),
 
-        # 兼容旧 prompt 的字符串字段
-        "genre": genre_text,
-        "style": style_text,
+        # 这些字段先留空，后面交给输入分析器自动补
+        "main_categories": [],
+        "theme_tags": [],
+        "character_tags": [],
+        "plot_tags": [],
+        "style_tags": [],
+        "genre": "",
+        "style": "",
+        "reference_text": "",
+        "framework_text": "",
+        "banned": "",
+        "output_granularity": "outline",
 
-        "word_count": _normalize_word_count(meta.get("word_count")),
-        "reference_text": (meta.get("reference_text") or "").strip(),
-        "framework_text": (meta.get("framework_text") or "").strip(),
-        "banned": (meta.get("banned") or "").strip(),
-        "output_granularity": (meta.get("output_granularity") or "outline").strip(),
         "created_at": datetime.now(timezone.utc).isoformat()
     }
 
@@ -1620,6 +1621,176 @@ def _run_chat_pipeline_async(flask_app, task_id, session_id, user_id, project_id
             )
 
 
+def _allowed_reference_file(filename):
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_REFERENCE_EXTENSIONS
+
+
+def _truncate_reference_text(text, max_chars=MAX_REFERENCE_TEXT_CHARS):
+    text = (text or "").strip()
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars]
+
+# 接下来的函数是分析用户输入的参考剧本的，有纯文本输入，网页链接，PDF的桑模式
+def _extract_text_from_pdf_bytes(file_bytes):
+    reader = PdfReader(BytesIO(file_bytes))
+    parts = []
+    for page in reader.pages:
+        try:
+            parts.append(page.extract_text() or "")
+        except Exception:
+            continue
+    return _truncate_reference_text("\n".join(parts))
+
+
+def _extract_text_from_plain_bytes(file_bytes):
+    try:
+        return _truncate_reference_text(file_bytes.decode("utf-8"))
+    except UnicodeDecodeError:
+        try:
+            return _truncate_reference_text(file_bytes.decode("gbk"))
+        except Exception:
+            return _truncate_reference_text(file_bytes.decode("utf-8", errors="ignore"))
+
+
+def _extract_main_text_from_html(html):
+    soup = BeautifulSoup(html, "html.parser")
+
+    # 去掉噪音标签
+    for tag in soup(["script", "style", "noscript", "header", "footer", "nav", "svg", "iframe"]):
+        tag.decompose()
+
+    text = soup.get_text("\n", strip=True)
+    return _truncate_reference_text(text)
+
+
+def _fetch_reference_from_url(url):
+    # Requests 官方建议显式设置 timeout
+    resp = requests.get(url, timeout=(5, 20), headers={
+        "User-Agent": "Mozilla/5.0 ScriptMaker Internal Bot"
+    })
+    resp.raise_for_status()
+
+    content_type = resp.headers.get("Content-Type", "").lower()
+
+    # 如果是 PDF 链接
+    if "application/pdf" in content_type or url.lower().endswith(".pdf"):
+        return _extract_text_from_pdf_bytes(resp.content)
+
+    # 默认按 HTML 处理
+    html = resp.text
+    return _extract_main_text_from_html(html)
+
+
+@api.route("/reference/ingest", methods=["POST"])
+@login_required
+def ingest_reference():
+    """
+    读取参考素材：
+    1. 网页链接
+    2. 上传文件（pdf/txt/md）
+    最终统一返回 reference_text
+    """
+    try:
+        # JSON 模式：网页链接
+        if request.content_type and request.content_type.startswith("application/json"):
+            data = request.get_json(silent=True) or {}
+            ingest_type = (data.get("type") or "").strip()
+
+            if ingest_type != "url":
+                return jsonify({
+                    "success": False,
+                    "message": "JSON 模式仅支持 type=url"
+                }), 400
+
+            url = (data.get("url") or "").strip()
+            if not url:
+                return jsonify({
+                    "success": False,
+                    "message": "url 不能为空"
+                }), 400
+
+            reference_text = _fetch_reference_from_url(url)
+            if not reference_text:
+                return jsonify({
+                    "success": False,
+                    "message": "未能从网页中提取到正文内容"
+                }), 400
+
+            return jsonify({
+                "success": True,
+                "reference_text": reference_text,
+                "source_type": "url",
+                "source_name": url
+            })
+
+        # multipart/form-data 模式：上传文件
+        ingest_type = (request.form.get("type") or "").strip()
+        if ingest_type != "file":
+            return jsonify({
+                "success": False,
+                "message": "文件模式必须传 type=file"
+            }), 400
+
+        if "file" not in request.files:
+            return jsonify({
+                "success": False,
+                "message": "没有上传文件"
+            }), 400
+
+        file = request.files["file"]
+        if not file or not file.filename:
+            return jsonify({
+                "success": False,
+                "message": "文件名为空"
+            }), 400
+
+        filename = secure_filename(file.filename)
+        if not _allowed_reference_file(filename):
+            return jsonify({
+                "success": False,
+                "message": "仅支持 pdf / txt / md"
+            }), 400
+
+        ext = filename.rsplit(".", 1)[1].lower()
+        file_bytes = file.read()
+
+        if ext == "pdf":
+            reference_text = _extract_text_from_pdf_bytes(file_bytes)
+        else:
+            reference_text = _extract_text_from_plain_bytes(file_bytes)
+
+        if not reference_text:
+            return jsonify({
+                "success": False,
+                "message": "未能从文件中提取到正文内容"
+            }), 400
+
+        return jsonify({
+            "success": True,
+            "reference_text": reference_text,
+            "source_type": "file",
+            "source_name": filename
+        })
+
+    except requests.exceptions.Timeout:
+        return jsonify({
+            "success": False,
+            "message": "读取网页超时，请稍后重试"
+        }), 504
+    except requests.exceptions.RequestException as e:
+        return jsonify({
+            "success": False,
+            "message": f"网页抓取失败：{str(e)}"
+        }), 400
+    except Exception as e:
+        logging.error(f"读取参考素材失败: {str(e)}")
+        return jsonify({
+            "success": False,
+            "message": f"读取参考素材失败：{str(e)}"
+        }), 500
+
+
 @api.route('/chat/send', methods=['POST'])
 @login_required
 def chat_send():
@@ -1777,3 +1948,4 @@ def get_project_trace(project_id):
         'status': latest_status,
         'trace': latest_trace
     })
+

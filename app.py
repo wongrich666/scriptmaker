@@ -2,6 +2,22 @@
 github地址  https://github.com/wongrich666/scriptmaker.git
 ctrl K提交，ctrl shift K上传
 """
+
+"""
+使用终端上传的方法：
+1. 进入项目目录（如果还没进入）
+cd C:\\Users\\Administrator\\PycharmProjects\\scriptMaker
+
+2. 确认修改的文件已添加到暂存区（如果没加）
+git add .
+
+3. 提交代码（对应 Ctrl+K）
+git commit -m "本次修改的说明，比如：优化脚本生成逻辑"
+
+4. 推送到 GitHub（对应 Ctrl+Shift+K）
+git push origin main
+"""
+
 from common import create_app, init_login, db
 from models import init_models
 from auth import auth
