@@ -11,7 +11,7 @@ def run(payload):
     plot = generate_plot_outline(brief, chars)
     review = review_artifacts(brief, chars, plot)
     return {
-        "mode": mode,
+        "mode": brief["mode"],
         "story_brief": brief,
         "character_bible": chars,
         "plot_outline": plot,
