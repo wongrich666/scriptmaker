@@ -353,3 +353,131 @@ async function ingestReferenceFile() {
         referencePreviewBox.textContent = `错误：${err.message}`;
     }
 }
+
+const modelSelect = document.getElementById("modelSelect");
+const currentModelText = document.getElementById("currentModelText");
+
+async function loadCurrentModel() {
+    try {
+        const resp = await fetch(window.chatConfig.modelCurrentUrl);
+        const data = await resp.json();
+        if (resp.ok && data.success) {
+            const model = data.selected_model || "deepseek";
+            modelSelect.value = model;
+            currentModelText.textContent = model;
+        }
+    } catch (err) {
+        console.error("加载当前模型失败：", err);
+    }
+}
+
+async function updateModel(model) {
+    try {
+        const resp = await fetch(window.chatConfig.modelSelectUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ model })
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.success) {
+            throw new Error(data.message || "模型切换失败");
+        }
+        currentModelText.textContent = data.selected_model;
+    } catch (err) {
+        alert(`模型切换失败：${err.message}`);
+    }
+}
+
+modelSelect.addEventListener("change", () => {
+    updateModel(modelSelect.value);
+});
+
+const modelSelect = document.getElementById("modelSelect");
+const currentModelText = document.getElementById("currentModelText");
+
+async function loadCurrentModel() {
+    try {
+        const resp = await fetch(window.chatConfig.modelCurrentUrl);
+        const data = await resp.json();
+        if (resp.ok && data.success) {
+            const model = data.selected_model || "deepseek";
+            modelSelect.value = model;
+            currentModelText.textContent = model;
+        }
+    } catch (err) {
+        console.error("加载当前模型失败：", err);
+    }
+}
+
+async function updateModel(model) {
+    try {
+        const resp = await fetch(window.chatConfig.modelSelectUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ model })
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.success) {
+            throw new Error(data.message || "模型切换失败");
+        }
+        currentModelText.textContent = data.selected_model;
+    } catch (err) {
+        alert(`模型切换失败：${err.message}`);
+    }
+}
+
+modelSelect.addEventListener("change", () => {
+    updateModel(modelSelect.value);
+});
+
+function initSplitters() {
+    const app = document.getElementById("chatApp");
+    const leftSplitter = document.getElementById("leftSplitter");
+    const rightSplitter = document.getElementById("rightSplitter");
+
+    let isDraggingLeft = false;
+    let isDraggingRight = false;
+
+    let leftWidth = 260;
+    let rightWidth = 420;
+
+    function applyLayout() {
+        app.style.gridTemplateColumns = `${leftWidth}px 6px 1fr 6px ${rightWidth}px`;
+    }
+
+    leftSplitter.addEventListener("mousedown", () => {
+        isDraggingLeft = true;
+        leftSplitter.classList.add("dragging");
+    });
+
+    rightSplitter.addEventListener("mousedown", () => {
+        isDraggingRight = true;
+        rightSplitter.classList.add("dragging");
+    });
+
+    document.addEventListener("mouseup", () => {
+        isDraggingLeft = false;
+        isDraggingRight = false;
+        leftSplitter.classList.remove("dragging");
+        rightSplitter.classList.remove("dragging");
+    });
+
+    document.addEventListener("mousemove", (e) => {
+        if (isDraggingLeft) {
+            leftWidth = Math.max(180, Math.min(420, e.clientX));
+            applyLayout();
+        }
+
+        if (isDraggingRight) {
+            const totalWidth = window.innerWidth;
+            rightWidth = Math.max(300, Math.min(700, totalWidth - e.clientX));
+            applyLayout();
+        }
+    });
+
+    applyLayout();
+}

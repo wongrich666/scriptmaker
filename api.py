@@ -1112,24 +1112,11 @@ def _generate_character_bible(story_brief, selected_model=None):
 
     try:
         content = _call_api_for_chat(prompt, selected_model=selected_model)
-    except Exception:
-        content = f"""# 人物设定（兜底版）
+    except Exception as e:
+        raise Exception(f"人物设定生成失败：{str(e)}")
 
-## 主角
-- 名称：待定主角
-- 欲望：实现核心目标
-- 弱点：情绪与现实压力并存
-- 成长线：从被动承受到主动破局
-
-## 核心配角
-- 配角A：推动主线
-- 配角B：制造阻力
-- 配角C：提供情绪价值
-
-## 人物关系
-- 主角与对立面：高压冲突
-- 主角与盟友：互相成就
-"""
+    if not content or "兜底版" in content or "待定主角" in content:
+        raise Exception("人物设定生成失败：模型返回了无效模板内容")
 
     return {
         "raw_text": content,
@@ -1178,27 +1165,11 @@ def _generate_plot_outline(story_brief, character_bible, selected_model=None):
 
     try:
         content = _call_api_for_chat(prompt, selected_model=selected_model)
-    except Exception:
-        content = f"""# 剧情大纲（兜底版）
+    except Exception as e:
+        raise Exception(f"情节大纲生成失败：{str(e)}")
 
-## Logline
-一个带有高压冲突与连续反转的短剧故事。
-
-## 开头强钩子
-主角在开场即遭遇重大危机，被迫进入主线冲突。
-
-## 核心矛盾
-主角目标与现实阻力正面碰撞，推动后续剧情升级。
-
-## 剧情结构
-- 第一阶段：建立人设与冲突
-- 第二阶段：误判与升级
-- 第三阶段：反转与代价
-- 第四阶段：高潮与收束
-
-## 追更点
-每阶段结尾设置悬念与情绪钩子。
-"""
+    if not content or "兜底版" in content or "待定情节" in content:
+        raise Exception("情节大纲生成失败：模型返回了无效模板内容")
 
     return {
         "raw_text": content,
@@ -1239,27 +1210,15 @@ def _review_artifacts(story_brief, character_bible, plot_outline, selected_model
 
     try:
         content = _call_api_for_chat(prompt, selected_model=selected_model)
-        rewrite_required = ("是否需要重写：是" in content) or ("rewrite_required: true" in content.lower())
-    except Exception:
-        content = """# 审核报告（兜底版）
+    except Exception as e:
+        raise Exception(f"审核生成失败：{str(e)}")
 
-- 总评分：78
-- 开头钩子：80
-- 主角压力：75
-- 情绪拉力：76
-- 冲突推进：79
-- 下一集诱因：80
-- 主要问题：中段推进略慢
-- 修改建议：加强中段冲突密度
-- 是否需要重写：否
-- 建议退回给谁：plot_writer
-"""
-        rewrite_required = False
+    if not content or "兜底版" in content or "待定" in content:
+        raise Exception("审核生成失败：模型返回了无效模板内容")
 
     return {
         "raw_text": content,
-        "summary": content[:300],
-        "rewrite_required": rewrite_required
+        "summary": content[:300]
     }
 
 
@@ -1839,6 +1798,37 @@ def chat_send():
         'session_id': session_id,
         'status': 'pending',
         'mode': _detect_input_mode(message, meta)
+    })
+
+
+@api.route('/model/current', methods=['GET'])
+@login_required
+def get_current_model():
+    selected_model = session.get('selected_model', API)
+    return jsonify({
+        'success': True,
+        'selected_model': selected_model,
+        'available_models': ['deepseek', 'gemini', 'ollama']
+    })
+
+
+@api.route('/model/select', methods=['POST'])
+@login_required
+def set_current_model():
+    data = request.get_json(silent=True) or {}
+    model = (data.get('model') or '').strip().lower()
+
+    allowed = {'deepseek', 'gemini', 'ollama'}
+    if model not in allowed:
+        return jsonify({
+            'success': False,
+            'message': '不支持的模型'
+        }), 400
+
+    session['selected_model'] = model
+    return jsonify({
+        'success': True,
+        'selected_model': model
     })
 
 
