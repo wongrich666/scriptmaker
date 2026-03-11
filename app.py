@@ -24,7 +24,7 @@ from auth import auth
 from dashboard import dashboard
 from chapters import chapters
 from characters import characters
-from api import api
+from chat_api import api
 from branches import branches
 from menu import menu
 from chat import chat
@@ -33,6 +33,10 @@ from flask_login import current_user, login_required
 import logging
 import sys
 import os
+import chat_api
+
+print("chat_api file =", chat_api.__file__)
+print("api blueprint deferred_functions =", len(api.deferred_functions))
 
 # 创建日志目录
 log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
@@ -165,6 +169,7 @@ def create_app_with_blueprints():
 
 
 app = create_app_with_blueprints()
+print(app.url_map)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=60002, debug=False)

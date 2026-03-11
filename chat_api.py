@@ -6,7 +6,7 @@
 # 3. 主要目的是先把聊天入口打通
 # 4. 后续可以把 CHAT_TASK_STORE 改成数据库表：
 #    conversation_session / generation_task / agent_trace 等
-# 5. 后续也可以把“人物 / 剧情 / 审核”从 api.py 再拆到
+# 5. 后续也可以把“人物 / 剧情 / 审核”从 chat_api.py 再拆到
 #    orchestrator/、agents/、review/、services/ 目录中
 # ============================================================
 import uuid
