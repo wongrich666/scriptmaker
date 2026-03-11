@@ -1,143 +1,198 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ScriptMaker 聊天创作台</title>
-    <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ScriptMaker 聊天创作台</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}">
 </head>
 <body>
-<div class="chat-app" id="chatApp">
-    <aside class="sidebar" id="sidebar">
-        <div class="sidebar-header">
-            <h2>ScriptMaker</h2>
-            <p>内部剧本创作入口</p>
+  <div class="chat-app" id="chatApp">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h2>ScriptMaker</h2>
+        <p>内部剧本创作入口</p>
+      </div>
+
+      <div class="sidebar-section">
+        <button id="newChatBtn" class="secondary-btn full-width">新建对话</button>
+      </div>
+
+      <div class="sidebar-section info-card">
+        <h3>当前任务</h3>
+        <div class="meta-row">
+          <span>project_id</span>
+          <strong id="projectIdText">未创建</strong>
         </div>
-        <div class="sidebar-section">
-            <button id="newChatBtn" class="primary-btn">新建对话</button>
+        <div class="meta-row">
+          <span>task_id</span>
+          <strong id="taskIdText">未开始</strong>
         </div>
-        <div class="sidebar-section">
-            <h3>当前任务</h3>
-            <div id="projectInfo">
-                <div>project_id：<span id="projectIdText">未创建</span></div>
-                <div>task_id：<span id="taskIdText">未开始</span></div>
-                <div>状态：<span id="taskStatusText">空闲</span></div>
-                <div>当前模型：<span id="currentModelText">未加载</span></div>
-            </div>
+        <div class="meta-row">
+          <span>状态</span>
+          <strong id="taskStatusText">空闲</strong>
         </div>
+        <div class="meta-row">
+          <span>当前模型</span>
+          <strong id="currentModelText">未加载</strong>
+        </div>
+      </div>
+
+      <div class="sidebar-section info-card">
+        <h3>快捷入口</h3>
+        <div class="legacy-actions">
+          <a id="storyExportBtn" class="link-btn disabled" href="#">导出故事文本</a>
+          <a id="scriptExportBtn" class="link-btn disabled" href="#">导出剧本文本</a>
+          <a id="editScriptBtn" class="link-btn disabled" href="#">编辑项目</a>
+          <a id="characterDetailBtn" class="link-btn disabled" href="#">角色详情</a>
+          <a id="chapterDetailBtn" class="link-btn disabled" href="#">章节详情</a>
+        </div>
+      </div>
     </aside>
 
     <div class="splitter" id="leftSplitter"></div>
 
-    <main class="main-panel" id="mainPanel">
-        <header class="main-header">
-            <div class="main-header-top">
-                <div>
-                    <h1>剧本创作智能体</h1>
-                    <p>输入需求，系统自动生成：人设 / 剧情 / 审核报告 / 最终结果</p>
-                </div>
+    <main class="main-panel">
+      <header class="main-header">
+        <div class="main-header-top">
+          <div>
+            <h1>剧本创作智能体</h1>
+            <p>输入需求，系统自动生成：人设 / 剧情 / 审核意见 / 最终结果</p>
+          </div>
 
-                <div class="header-controls">
-                    <div class="inline-field">
-                        <label for="modelSelect">模型</label>
-                        <select id="modelSelect">
-                            <option value="deepseek">DeepSeek</option>
-                            <option value="gemini">Gemini</option>
-                            <option value="ollama">Ollama</option>
-                        </select>
-                    </div>
-
-                    <div class="inline-field">
-                        <label for="wordCountInput">字数（万字）</label>
-                        <input id="wordCountInput" type="number" min="0.5" max="20" step="0.5" value="2">
-                    </div>
-                </div>
-            </div>
-        </header>
-
-        <section class="rule-box">
-            <h3>输入规则</h3>
-            <ol>
-                <li>至少写清楚：题材倾向 + 核心冲突 + 想要的感觉</li>
-                <li>如果你写得少，系统会自动补全分类、风格和创作方向</li>
-                <li>默认按 2 万字短篇小说处理</li>
-            </ol>
-        </section>
-
-        <section id="messageList" class="message-list">
-            <div class="message system">
-                <div class="bubble">你好，请输入你的创作需求。
-                </div>
-            </div>
-        </section>
-
-        <section class="composer">
-            <div class="simple-form">
-                <div class="field-column">
-                    <label for="messageInput">用户输入</label>
-                    <textarea id="messageInput" placeholder="请输入你的剧本需求"></textarea>
-                </div>
+          <div class="header-controls">
+            <div class="inline-field">
+              <label for="modelSelect">模型</label>
+              <select id="modelSelect">
+                <option value="deepseek">DeepSeek</option>
+                <option value="gemini">Gemini</option>
+                <option value="ollama">Ollama</option>
+              </select>
             </div>
 
-            <div class="composer-actions">
-                <button id="sendBtn" class="primary-btn">发送需求</button>
+            <div class="inline-field">
+              <label for="wordCountInput">字数（万字）</label>
+              <input id="wordCountInput" type="number" min="0.5" step="0.5" value="2" />
             </div>
-        </section>
+          </div>
+        </div>
+      </header>
+
+      <section class="rule-box">
+        <h3>输入规则</h3>
+        <ol>
+          <li>至少写清楚：题材倾向 + 核心冲突 + 想要的感觉。</li>
+          <li>如果你写得少，系统会自动补全分类、风格和创作方向。</li>
+          <li>默认按 2 万字短篇小说处理。</li>
+        </ol>
+      </section>
+
+      <section class="message-list" id="messageList">
+        <div class="message system">
+          <div class="bubble">你好，请输入你的创作需求。我会先搭人物，再搭剧情，再做审核和整合。</div>
+        </div>
+      </section>
+
+      <footer class="composer">
+        <div class="simple-form">
+          <div class="field-column">
+            <label for="messageInput">用户输入</label>
+            <textarea
+              id="messageInput"
+              placeholder="例如：我想写一个都市玄幻题材，主角是普通上班族，故事要有悬疑感和强反转，整体偏短剧节奏。"
+            ></textarea>
+          </div>
+
+          <div class="composer-actions">
+            <button id="sendBtn" class="primary-btn">发送需求</button>
+          </div>
+        </div>
+      </footer>
     </main>
 
     <div class="splitter" id="rightSplitter"></div>
 
-    <aside class="result-panel" id="resultPanel">
-        <div class="result-header">
-            <h2>结果详情</h2>
+    <aside class="result-panel">
+      <div class="result-header">
+        <h2>创作工作台</h2>
+        <p>你可以在生成过程中查看进度、阶段摘要和阶段成果。</p>
+      </div>
+
+      <section class="progress-card" id="progressCard">
+        <div class="progress-card-top">
+          <div>
+            <div class="status-pill" id="stagePillText">空闲</div>
+            <h3 id="stageTitleText">等待开始</h3>
+            <p id="stageHintText">输入需求后，系统会先搭建人物，再整理剧情，最后输出最终稿。</p>
+          </div>
+          <div class="progress-percent" id="progressPercentText">0%</div>
         </div>
 
+        <div class="progress-bar">
+          <div class="progress-bar-fill" id="progressBarFill" style="width: 0%;"></div>
+        </div>
+
+        <div class="slow-tip" id="slowTipText"></div>
+
+        <ul class="progress-steps" id="progressStepList"></ul>
+      </section>
+
+      <section class="timeline-card">
+        <div class="card-head">
+          <h3>生成进度</h3>
+          <span id="timelineCountText">0 条更新</span>
+        </div>
+        <div class="timeline-list" id="timelineList">
+          <div class="timeline-empty">任务开始后，这里会显示系统的创作过程。</div>
+        </div>
+      </section>
+
+      <section class="result-card">
         <div class="tabs">
-            <button class="tab-btn active" data-tab="final">最终剧本</button>
-            <button class="tab-btn" data-tab="character">人物设定</button>
-            <button class="tab-btn" data-tab="outline">剧情大纲</button>
-            <button class="tab-btn" data-tab="review">审核报告</button>
-            <button class="tab-btn" data-tab="trace">生成过程</button>
+          <button class="tab-btn active" data-tab="final">最终剧本</button>
+          <button class="tab-btn" data-tab="character">人物设定</button>
+          <button class="tab-btn" data-tab="outline">剧情大纲</button>
+          <button class="tab-btn" data-tab="review">审核意见</button>
+          <button class="tab-btn" data-tab="trace">生成过程</button>
         </div>
 
         <div class="tab-content active" id="tab-final">
-            <pre id="finalScriptBox">暂无内容</pre>
+          <div class="tab-intro">整合后的最终版本会显示在这里。</div>
+          <pre id="finalScriptBox">暂无内容</pre>
         </div>
 
         <div class="tab-content" id="tab-character">
-            <pre id="characterBox">暂无内容</pre>
+          <div class="tab-intro">这里显示角色关系、人物目标和核心冲突。</div>
+          <pre id="characterBox">暂无内容</pre>
         </div>
 
         <div class="tab-content" id="tab-outline">
-            <pre id="outlineBox">暂无内容</pre>
+          <div class="tab-intro">这里显示故事结构、阶段推进和关键反转。</div>
+          <pre id="outlineBox">暂无内容</pre>
         </div>
 
         <div class="tab-content" id="tab-review">
-            <pre id="reviewBox">暂无内容</pre>
+          <div class="tab-intro">这里显示系统对节奏、逻辑和商业化潜力的审核意见。</div>
+          <pre id="reviewBox">暂无内容</pre>
         </div>
 
         <div class="tab-content" id="tab-trace">
-            <pre id="traceBox">暂无内容</pre>
+          <div class="tab-intro">这里显示更完整的生成过程记录。</div>
+          <div id="traceBox" class="trace-readable">暂无生成过程</div>
         </div>
+      </section>
     </aside>
-</div>
+  </div>
 
-<script>
+  <script>
     window.chatConfig = {
-        sendUrl: "/api/chat/send",
-        taskBaseUrl: "/api/task/",
-        projectBaseUrl: "/api/project/",
-        modelCurrentUrl: "/api/model/current",
-        modelSelectUrl: "/api/model/select"
+      sendUrl: "/api/chat/send",
+      taskBaseUrl: "/api/chat/task/",
+      projectBaseUrl: "/api/chat/project/",
+      modelCurrentUrl: "/api/model/current",
+      modelSelectUrl: "/api/model/select"
     };
-</script>
-<script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+  </script>
+  <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
 </body>
 </html>
-
-
-
-
-
-

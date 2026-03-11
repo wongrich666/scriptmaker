@@ -1,15 +1,27 @@
 const DEFAULT_WORD_COUNT_WAN = 2;
+const POLL_INTERVAL = 2000;
+const SLOW_HINT_AFTER_MS = 18000;
+const VERY_SLOW_HINT_AFTER_MS = 32000;
 
 let currentTaskId = null;
 let currentProjectId = null;
 let pollingTimer = null;
+let lastTraceCount = 0;
+let lastTraceUpdateMs = 0;
+let taskStartedMs = 0;
+
+const STAGE_ORDER = [
+  { stage: "queued", label: "已创建任务" },
+  { stage: "character_bible", label: "人物设定" },
+  { stage: "plot_outline", label: "剧情大纲" },
+  { stage: "review_report", label: "审核意见" },
+  { stage: "final_script", label: "最终稿" }
+];
 
 const sendBtn = document.getElementById("sendBtn");
 const newChatBtn = document.getElementById("newChatBtn");
-
 const messageInput = document.getElementById("messageInput");
 const wordCountInput = document.getElementById("wordCountInput");
-
 const projectIdText = document.getElementById("projectIdText");
 const taskIdText = document.getElementById("taskIdText");
 const taskStatusText = document.getElementById("taskStatusText");
@@ -22,365 +34,540 @@ const reviewBox = document.getElementById("reviewBox");
 const traceBox = document.getElementById("traceBox");
 
 const messageList = document.getElementById("messageList");
-
 const storyExportBtn = document.getElementById("storyExportBtn");
 const scriptExportBtn = document.getElementById("scriptExportBtn");
 const editScriptBtn = document.getElementById("editScriptBtn");
 const characterDetailBtn = document.getElementById("characterDetailBtn");
 const chapterDetailBtn = document.getElementById("chapterDetailBtn");
-
 const modelSelect = document.getElementById("modelSelect");
 
-// 标签切换
-document.querySelectorAll(".tab-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-        document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
-        document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+const stagePillText = document.getElementById("stagePillText");
+const stageTitleText = document.getElementById("stageTitleText");
+const stageHintText = document.getElementById("stageHintText");
+const progressBarFill = document.getElementById("progressBarFill");
+const progressPercentText = document.getElementById("progressPercentText");
+const progressStepList = document.getElementById("progressStepList");
+const timelineList = document.getElementById("timelineList");
+const timelineCountText = document.getElementById("timelineCountText");
+const slowTipText = document.getElementById("slowTipText");
 
-        btn.classList.add("active");
-        const target = document.getElementById(`tab-${btn.dataset.tab}`);
-        if (target) {
-            target.classList.add("active");
-        }
-    });
+document.querySelectorAll(".tab-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+    document.querySelectorAll(".tab-content").forEach((c) => c.classList.remove("active"));
+    btn.classList.add("active");
+    const target = document.getElementById(`tab-${btn.dataset.tab}`);
+    if (target) target.classList.add("active");
+  });
 });
 
-// 绑定按钮
 if (newChatBtn) {
-    newChatBtn.addEventListener("click", resetChatState);
+  newChatBtn.addEventListener("click", resetChatState);
 }
-
 if (sendBtn) {
-    sendBtn.addEventListener("click", handleSend);
+  sendBtn.addEventListener("click", handleSend);
 }
-
 if (modelSelect) {
-    modelSelect.addEventListener("change", () => {
-        updateModel(modelSelect.value);
-    });
+  modelSelect.addEventListener("change", () => {
+    updateModel(modelSelect.value);
+  });
 }
 
-function resetChatState() {
-    currentTaskId = null;
-    currentProjectId = null;
+function escapeHtml(text) {
+  return String(text || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
 
-    if (projectIdText) projectIdText.textContent = "未创建";
-    if (taskIdText) taskIdText.textContent = "未开始";
-    if (taskStatusText) taskStatusText.textContent = "空闲";
+function formatDisplayTime(isoText) {
+  if (!isoText) return "";
+  const date = new Date(isoText);
+  if (Number.isNaN(date.getTime())) return isoText;
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mm = String(date.getMinutes()).padStart(2, "0");
+  const ss = String(date.getSeconds()).padStart(2, "0");
+  return `${hh}:${mm}:${ss}`;
+}
 
-    if (finalScriptBox) finalScriptBox.textContent = "暂无内容";
-    if (characterBox) characterBox.textContent = "暂无内容";
-    if (outlineBox) outlineBox.textContent = "暂无内容";
-    if (reviewBox) reviewBox.textContent = "暂无内容";
-    if (traceBox) traceBox.textContent = "暂无内容";
+function formatStatusLabel(status) {
+  if (status === "pending") return "已创建";
+  if (status === "running") return "进行中";
+  if (status === "done") return "已完成";
+  if (status === "failed") return "失败";
+  return "空闲";
+}
 
-    disableLegacyLinks();
-
-    if (pollingTimer) {
-        clearInterval(pollingTimer);
-        pollingTimer = null;
-    }
+function switchTab(tabName) {
+  const btn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
+  if (btn) btn.click();
 }
 
 function addMessage(role, text) {
-    if (!messageList) return;
+  if (!messageList) return;
+  const wrap = document.createElement("div");
+  wrap.className = `message ${role}`;
 
-    const wrap = document.createElement("div");
-    wrap.className = `message ${role}`;
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+  bubble.textContent = text;
 
-    const bubble = document.createElement("div");
-    bubble.className = "bubble";
-    bubble.textContent = text;
-
-    wrap.appendChild(bubble);
-    messageList.appendChild(wrap);
-    messageList.scrollTop = messageList.scrollHeight;
+  wrap.appendChild(bubble);
+  messageList.appendChild(wrap);
+  messageList.scrollTop = messageList.scrollHeight;
 }
 
 function disableLegacyLinks() {
-    [
-        storyExportBtn,
-        scriptExportBtn,
-        editScriptBtn,
-        characterDetailBtn,
-        chapterDetailBtn
-    ].forEach(a => {
-        if (!a) return;
-        a.classList.add("disabled");
-        a.href = "#";
-    });
+  [storyExportBtn, scriptExportBtn, editScriptBtn, characterDetailBtn, chapterDetailBtn].forEach((a) => {
+    if (!a) return;
+    a.classList.add("disabled");
+    a.href = "#";
+  });
 }
 
 function enableLegacyLinks(projectId) {
-    if (storyExportBtn) storyExportBtn.href = `/dashboard/script/${projectId}/export_story_txt`;
-    if (scriptExportBtn) scriptExportBtn.href = `/dashboard/script/${projectId}/export_script_txt`;
-    if (editScriptBtn) editScriptBtn.href = `/dashboard/script/${projectId}/edit?tab=basic`;
-    if (characterDetailBtn) characterDetailBtn.href = `/dashboard/script/${projectId}/edit?tab=characters`;
-    if (chapterDetailBtn) chapterDetailBtn.href = `/chapters/script/${projectId}/chapters`;
+  if (storyExportBtn) storyExportBtn.href = `/dashboard/script/${projectId}/export_story_txt`;
+  if (scriptExportBtn) scriptExportBtn.href = `/dashboard/script/${projectId}/export_script_txt`;
+  if (editScriptBtn) editScriptBtn.href = `/dashboard/script/${projectId}/edit?tab=basic`;
+  if (characterDetailBtn) characterDetailBtn.href = `/dashboard/script/${projectId}/edit?tab=characters`;
+  if (chapterDetailBtn) chapterDetailBtn.href = `/chapters/script/${projectId}/chapters`;
 
-    [
-        storyExportBtn,
-        scriptExportBtn,
-        editScriptBtn,
-        characterDetailBtn,
-        chapterDetailBtn
-    ].forEach(a => {
-        if (!a) return;
-        a.classList.remove("disabled");
-    });
+  [storyExportBtn, scriptExportBtn, editScriptBtn, characterDetailBtn, chapterDetailBtn].forEach((a) => {
+    if (!a) return;
+    a.classList.remove("disabled");
+  });
+}
+
+function setIdleProgressCard() {
+  if (stagePillText) stagePillText.textContent = "空闲";
+  if (stageTitleText) stageTitleText.textContent = "等待开始";
+  if (stageHintText) stageHintText.textContent = "输入需求后，系统会先搭建人物，再整理剧情，最后输出最终稿。";
+  if (progressPercentText) progressPercentText.textContent = "0%";
+  if (progressBarFill) progressBarFill.style.width = "0%";
+  if (slowTipText) slowTipText.textContent = "";
+  renderProgressSteps("", "idle");
+}
+
+function renderProgressSteps(currentStage, status) {
+  if (!progressStepList) return;
+
+  const currentIndex = STAGE_ORDER.findIndex((item) => item.stage === currentStage);
+  const allDone = status === "done";
+
+  progressStepList.innerHTML = STAGE_ORDER.map((item, idx) => {
+    let stateClass = "pending";
+    let marker = "○";
+
+    if (allDone || (currentIndex !== -1 && idx < currentIndex)) {
+      stateClass = "done";
+      marker = "✓";
+    } else if (!allDone && currentIndex !== -1 && idx === currentIndex) {
+      stateClass = status === "failed" ? "failed" : "active";
+      marker = status === "failed" ? "!" : "•";
+    }
+
+    return `
+      <li class="${stateClass}">
+        <span class="step-marker">${marker}</span>
+        <span class="step-label">${escapeHtml(item.label)}</span>
+      </li>
+    `;
+  }).join("");
+}
+
+function updateProgressCardFromTask(task) {
+  const progress = Math.max(0, Math.min(100, Number(task.progress || 0)));
+  if (stagePillText) stagePillText.textContent = formatStatusLabel(task.status);
+  if (stageTitleText) stageTitleText.textContent = task.current_title || "处理中";
+  if (stageHintText) stageHintText.textContent = task.current_message || "";
+  if (progressPercentText) progressPercentText.textContent = `${Math.round(progress)}%`;
+  if (progressBarFill) progressBarFill.style.width = `${progress}%`;
+  renderProgressSteps(task.current_stage, task.status);
+}
+
+function updateSlowTip(task) {
+  if (!slowTipText) return;
+
+  if (!task || task.status !== "running") {
+    slowTipText.textContent = "";
+    return;
+  }
+
+  const anchor = lastTraceUpdateMs || taskStartedMs || Date.now();
+  const diff = Date.now() - anchor;
+
+  if (diff >= VERY_SLOW_HINT_AFTER_MS) {
+    slowTipText.textContent = "当前内容较长，正在继续生成，请稍等。";
+  } else if (diff >= SLOW_HINT_AFTER_MS) {
+    slowTipText.textContent = "这一阶段会稍慢一些，我还在继续整理。";
+  } else {
+    slowTipText.textContent = "";
+  }
+}
+
+function renderTimeline(trace) {
+  if (!timelineList) return;
+
+  if (!trace || trace.length === 0) {
+    timelineList.innerHTML = `<div class="timeline-empty">任务开始后，这里会显示系统的创作过程。</div>`;
+    if (timelineCountText) timelineCountText.textContent = "0 条更新";
+    return;
+  }
+
+  timelineList.innerHTML = trace.map((item) => {
+    return `
+      <div class="timeline-item ${escapeHtml(item.status || "running")}">
+        <div class="timeline-dot"></div>
+        <div class="timeline-body">
+          <div class="timeline-top">
+            <strong>${escapeHtml(item.title || item.stage || "阶段更新")}</strong>
+            <span>${escapeHtml(formatDisplayTime(item.time))}</span>
+          </div>
+          <div class="timeline-message">${escapeHtml(item.message || "").replaceAll("\n", "<br>")}</div>
+          ${item.preview ? `<div class="timeline-preview">${escapeHtml(item.preview)}</div>` : ""}
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  if (timelineCountText) timelineCountText.textContent = `${trace.length} 条更新`;
+}
+
+function renderTraceTab(trace) {
+  if (!traceBox) return;
+
+  if (!trace || trace.length === 0) {
+    traceBox.innerHTML = `<div class="trace-empty">暂无生成过程</div>`;
+    return;
+  }
+
+  traceBox.innerHTML = trace.map((item, idx) => {
+    return `
+      <div class="trace-entry">
+        <div class="trace-entry-head">
+          <strong>#${idx + 1} ${escapeHtml(item.title || item.stage || "阶段更新")}</strong>
+          <span>${escapeHtml(formatDisplayTime(item.time))}</span>
+        </div>
+        <div class="trace-entry-meta">阶段：${escapeHtml(item.step || item.stage || "")} ｜ 状态：${escapeHtml(formatStatusLabel(item.status || ""))}</div>
+        <div class="trace-entry-message">${escapeHtml(item.message || "").replaceAll("\n", "<br>")}</div>
+        ${item.preview ? `<div class="trace-entry-preview">${escapeHtml(item.preview)}</div>` : ""}
+      </div>
+    `;
+  }).join("");
+}
+
+function syncNewTraceMessages(trace) {
+  if (!trace || trace.length <= lastTraceCount) return;
+
+  const newItems = trace.slice(lastTraceCount);
+  newItems.forEach((item) => {
+    const lines = [];
+    if (item.title) lines.push(item.title);
+    if (item.message) lines.push(item.message);
+    if (item.preview && item.status === "done") lines.push(`阶段摘要：${item.preview}`);
+    addMessage("system", lines.join("\n"));
+  });
+
+  lastTraceCount = trace.length;
+  lastTraceUpdateMs = Date.now();
+}
+
+function renderArtifacts(data) {
+  if (finalScriptBox) finalScriptBox.textContent = data.final_script || "暂无最终剧本";
+  if (characterBox) characterBox.textContent = data.character_bible || "暂无人物设定";
+  if (outlineBox) outlineBox.textContent = data.plot_outline || "暂无剧情大纲";
+  if (reviewBox) reviewBox.textContent = data.review_report || "暂无审核意见";
 }
 
 async function safeReadJson(resp) {
   const text = await resp.text();
   const contentType = resp.headers.get("content-type") || "";
-
   if (!contentType.includes("application/json")) {
-    throw new Error(
-      `接口没有返回 JSON。HTTP ${resp.status}，Content-Type: ${contentType}，前200字符：${text.slice(0, 200)}`
-    );
+    throw new Error(`接口没有返回 JSON。HTTP ${resp.status}，前 200 字符：${text.slice(0, 200)}`);
   }
-
   try {
     return JSON.parse(text);
   } catch (e) {
-    throw new Error(`JSON 解析失败：${e.message}；原始内容前200字符：${text.slice(0, 200)}`);
+    throw new Error(`JSON 解析失败：${e.message}`);
+  }
+}
+
+async function loadArtifacts(projectId) {
+  const resp = await fetch(`${window.chatConfig.projectBaseUrl}${projectId}/artifacts`);
+  const data = await safeReadJson(resp);
+  if (!resp.ok || !data.success) {
+    throw new Error(data.message || "加载结果失败");
+  }
+  renderArtifacts(data);
+  return data;
+}
+
+async function loadTrace(projectId) {
+  const resp = await fetch(`${window.chatConfig.projectBaseUrl}${projectId}/trace`);
+  const data = await safeReadJson(resp);
+  if (!resp.ok || !data.success) {
+    throw new Error(data.message || "加载过程失败");
+  }
+  renderTimeline(data.trace || []);
+  renderTraceTab(data.trace || []);
+  syncNewTraceMessages(data.trace || []);
+  return data.trace || [];
+}
+
+async function refreshProjectPanels(projectId) {
+  const [trace, artifacts] = await Promise.all([
+    loadTrace(projectId),
+    loadArtifacts(projectId)
+  ]);
+  return { trace, artifacts };
+}
+
+function resetChatState() {
+  currentTaskId = null;
+  currentProjectId = null;
+  lastTraceCount = 0;
+  lastTraceUpdateMs = 0;
+  taskStartedMs = 0;
+
+  if (projectIdText) projectIdText.textContent = "未创建";
+  if (taskIdText) taskIdText.textContent = "未开始";
+  if (taskStatusText) taskStatusText.textContent = "空闲";
+
+  if (finalScriptBox) finalScriptBox.textContent = "暂无内容";
+  if (characterBox) characterBox.textContent = "暂无内容";
+  if (outlineBox) outlineBox.textContent = "暂无内容";
+  if (reviewBox) reviewBox.textContent = "暂无内容";
+  if (traceBox) traceBox.innerHTML = `<div class="trace-empty">暂无生成过程</div>`;
+  if (timelineList) timelineList.innerHTML = `<div class="timeline-empty">任务开始后，这里会显示系统的创作过程。</div>`;
+  if (timelineCountText) timelineCountText.textContent = "0 条更新";
+
+  disableLegacyLinks();
+  setIdleProgressCard();
+
+  if (pollingTimer) {
+    clearInterval(pollingTimer);
+    pollingTimer = null;
   }
 }
 
 async function handleSend() {
-    const message = messageInput ? messageInput.value.trim() : "";
-    if (!message) {
-        alert("请填写“用户输入”");
-        return;
+  const message = messageInput ? messageInput.value.trim() : "";
+  if (!message) {
+    alert("请填写“用户输入”");
+    return;
+  }
+
+  let wordCountWan = wordCountInput ? parseFloat(wordCountInput.value) : DEFAULT_WORD_COUNT_WAN;
+  if (Number.isNaN(wordCountWan) || wordCountWan <= 0) {
+    wordCountWan = DEFAULT_WORD_COUNT_WAN;
+    if (wordCountInput) wordCountInput.value = DEFAULT_WORD_COUNT_WAN;
+  }
+
+  if (sendBtn) sendBtn.disabled = true;
+
+  lastTraceCount = 0;
+  lastTraceUpdateMs = 0;
+  taskStartedMs = Date.now();
+
+  if (finalScriptBox) finalScriptBox.textContent = "暂无内容";
+  if (characterBox) characterBox.textContent = "暂无内容";
+  if (outlineBox) outlineBox.textContent = "暂无内容";
+  if (reviewBox) reviewBox.textContent = "暂无内容";
+  if (traceBox) traceBox.innerHTML = `<div class="trace-empty">正在等待生成过程...</div>`;
+  if (timelineList) timelineList.innerHTML = `<div class="timeline-empty">正在创建任务...</div>`;
+  if (timelineCountText) timelineCountText.textContent = "0 条更新";
+
+  addMessage("user", `〖字数〗${wordCountWan}万字\n〖需求〗${message}`);
+  addMessage("system", "已收到你的需求，我会先搭人物，再搭剧情，再做审核和整合。");
+
+  const payload = {
+    project_id: currentProjectId,
+    message,
+    meta: {
+      word_count_wan: wordCountWan
+    }
+  };
+
+  try {
+    const resp = await fetch(window.chatConfig.sendUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await safeReadJson(resp);
+    if (!resp.ok || !data.success) {
+      throw new Error(data.message || data.error || "发送失败");
     }
 
-    let wordCountWan = wordCountInput ? parseFloat(wordCountInput.value) : DEFAULT_WORD_COUNT_WAN;
-    if (Number.isNaN(wordCountWan) || wordCountWan <= 0) {
-        wordCountWan = DEFAULT_WORD_COUNT_WAN;
-        if (wordCountInput) wordCountInput.value = DEFAULT_WORD_COUNT_WAN;
-    }
+    currentTaskId = data.task_id;
+    currentProjectId = data.project_id || currentProjectId;
 
-    if (sendBtn) sendBtn.disabled = true;
+    if (taskIdText) taskIdText.textContent = currentTaskId || "未返回";
+    if (projectIdText && currentProjectId) projectIdText.textContent = currentProjectId;
+    if (taskStatusText) taskStatusText.textContent = `${data.status || "pending"} / ${data.current_stage || "queued"}`;
 
-    addMessage("user", `【字数】${wordCountWan}万字\n【需求】${message}`);
-    addMessage("system", "正在创建任务，请稍候……");
+    updateProgressCardFromTask(data);
+    startPollingTask(currentTaskId);
+  } catch (err) {
+    addMessage("system", `发送失败：${err.message}`);
+    if (sendBtn) sendBtn.disabled = false;
+  }
+}
 
-    const payload = {
-        project_id: currentProjectId,
-        message: message,
-        meta: {
-            word_count_wan: wordCountWan
-        }
-    };
-
-    try {
-        const resp = await fetch(window.chatConfig.sendUrl, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify(payload)
-        });
-
-        const data = await safeReadJson(resp);
-
-        if (!resp.ok || !data.success) {
-            throw new Error(data.message || data.error || "发送失败");
-        }
-
-        currentTaskId = data.task_id;
-        if (taskIdText) taskIdText.textContent = data.task_id || "未返回";
-        if (taskStatusText) taskStatusText.textContent = data.status || "pending";
-
-        startPollingTask(currentTaskId);
-    } catch (err) {
-        addMessage("system", `发送失败：${err.message}`);
-        if (sendBtn) sendBtn.disabled = false;
-    }
+function stopPolling() {
+  if (pollingTimer) {
+    clearInterval(pollingTimer);
+    pollingTimer = null;
+  }
 }
 
 function startPollingTask(taskId) {
-    if (pollingTimer) {
-        clearInterval(pollingTimer);
+  stopPolling();
+
+  const tick = async () => {
+    try {
+      const resp = await fetch(`${window.chatConfig.taskBaseUrl}${taskId}`);
+      const data = await safeReadJson(resp);
+
+      if (!resp.ok || !data.success) {
+        throw new Error(data.message || "任务查询失败");
+      }
+
+      if (taskStatusText) {
+        taskStatusText.textContent = `${data.status} / ${data.current_stage}`;
+      }
+
+      if (data.project_id) {
+        currentProjectId = data.project_id;
+        if (projectIdText) projectIdText.textContent = currentProjectId;
+      }
+      if (data.task_id && taskIdText) {
+        taskIdText.textContent = data.task_id;
+      }
+
+      updateProgressCardFromTask(data);
+
+      if (currentProjectId) {
+        await refreshProjectPanels(currentProjectId);
+        enableLegacyLinks(currentProjectId);
+      }
+
+      updateSlowTip(data);
+
+      if (data.status === "done") {
+        stopPolling();
+        if (sendBtn) sendBtn.disabled = false;
+        addMessage("system", "最终稿已完成，你现在可以查看完整内容。");
+        switchTab("final");
+        return;
+      }
+
+      if (data.status === "failed") {
+        stopPolling();
+        if (sendBtn) sendBtn.disabled = false;
+        addMessage("system", `任务失败：${data.error || "未知错误"}`);
+      }
+    } catch (err) {
+      stopPolling();
+      if (sendBtn) sendBtn.disabled = false;
+      addMessage("system", `轮询失败：${err.message}`);
     }
+  };
 
-    pollingTimer = setInterval(async () => {
-        try {
-            const resp = await fetch(`${window.chatConfig.taskBaseUrl}${taskId}`);
-            const data = await safeReadJson(resp);
-
-            if (!resp.ok || !data.success) {
-                throw new Error(data.message || "任务查询失败");
-            }
-
-            if (taskStatusText) {
-                taskStatusText.textContent = `${data.status} / ${data.current_stage}`;
-            }
-
-            if (data.project_id) {
-                currentProjectId = data.project_id;
-                if (projectIdText) projectIdText.textContent = currentProjectId;
-            }
-
-            if (data.task_id && taskIdText) {
-                taskIdText.textContent = data.task_id;
-            }
-
-            if (data.status === "done") {
-                clearInterval(pollingTimer);
-                pollingTimer = null;
-                if (sendBtn) sendBtn.disabled = false;
-
-                addMessage("system", "任务已完成，正在加载结果……");
-
-                if (currentProjectId) {
-                    await loadArtifacts(currentProjectId);
-                    await loadTrace(currentProjectId);
-                    enableLegacyLinks(currentProjectId);
-                }
-            }
-
-            if (data.status === "failed") {
-                clearInterval(pollingTimer);
-                pollingTimer = null;
-                if (sendBtn) sendBtn.disabled = false;
-                addMessage("system", `任务失败：${data.error || "未知错误"}`);
-            }
-        } catch (err) {
-            clearInterval(pollingTimer);
-            pollingTimer = null;
-            if (sendBtn) sendBtn.disabled = false;
-            addMessage("system", `轮询失败：${err.message}`);
-        }
-    }, 2000);
-}
-
-async function loadArtifacts(projectId) {
-    const resp = await fetch(`${window.chatConfig.projectBaseUrl}${projectId}/artifacts`);
-    const data = await safeReadJson(resp);
-
-    if (!resp.ok || !data.success) {
-        throw new Error(data.message || "加载结果失败");
-    }
-
-    if (finalScriptBox) finalScriptBox.textContent = data.final_script || "暂无最终剧本";
-    if (characterBox) characterBox.textContent = data.character_bible || "暂无人物设定";
-    if (outlineBox) outlineBox.textContent = data.plot_outline || "暂无剧情大纲";
-    if (reviewBox) reviewBox.textContent = data.review_report || "暂无审核报告";
-}
-
-async function loadTrace(projectId) {
-    const resp = await fetch(`${window.chatConfig.projectBaseUrl}${projectId}/trace`);
-    const data = await safeReadJson(resp);
-
-    if (!resp.ok || !data.success) {
-        throw new Error(data.message || "加载过程失败");
-    }
-
-    const traceText = (data.trace || []).map((item, idx) => {
-        return [
-            `#${idx + 1}`,
-            `阶段：${item.stage || ""}`,
-            `时间：${item.time || ""}`,
-            `摘要：${item.summary || ""}`,
-            ""
-        ].join("\n");
-    }).join("\n");
-
-    if (traceBox) traceBox.textContent = traceText || "暂无生成过程";
+  tick();
+  pollingTimer = setInterval(tick, POLL_INTERVAL);
 }
 
 async function loadCurrentModel() {
-    if (!window.chatConfig.modelCurrentUrl) return;
-
-    try {
-        const resp = await fetch(window.chatConfig.modelCurrentUrl);
-        const data = await safeReadJson(resp);
-
-        if (resp.ok && data.success) {
-            const model = data.selected_model || "deepseek";
-            if (modelSelect) modelSelect.value = model;
-            if (currentModelText) currentModelText.textContent = model;
-        }
-    } catch (err) {
-        console.error("加载当前模型失败：", err);
+  if (!window.chatConfig.modelCurrentUrl) return;
+  try {
+    const resp = await fetch(window.chatConfig.modelCurrentUrl);
+    const data = await safeReadJson(resp);
+    if (resp.ok && data.success) {
+      const model = data.selected_model || "deepseek";
+      if (modelSelect) modelSelect.value = model;
+      if (currentModelText) currentModelText.textContent = model;
     }
+  } catch (err) {
+    console.error("加载当前模型失败：", err);
+  }
 }
 
 async function updateModel(model) {
-    if (!window.chatConfig.modelSelectUrl) return;
-
-    try {
-        const resp = await fetch(window.chatConfig.modelSelectUrl, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ model })
-        });
-
-        const data = await safeReadJson(resp);
-
-        if (!resp.ok || !data.success) {
-            throw new Error(data.message || "模型切换失败");
-        }
-
-        if (currentModelText) currentModelText.textContent = data.selected_model;
-    } catch (err) {
-        alert(`模型切换失败：${err.message}`);
+  if (!window.chatConfig.modelSelectUrl) return;
+  try {
+    const resp = await fetch(window.chatConfig.modelSelectUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ model })
+    });
+    const data = await safeReadJson(resp);
+    if (!resp.ok || !data.success) {
+      throw new Error(data.message || "模型切换失败");
     }
+    if (currentModelText) currentModelText.textContent = data.selected_model;
+  } catch (err) {
+    alert(`模型切换失败：${err.message}`);
+  }
 }
 
 function initSplitters() {
-    const app = document.getElementById("chatApp");
-    const leftSplitter = document.getElementById("leftSplitter");
-    const rightSplitter = document.getElementById("rightSplitter");
+  const app = document.getElementById("chatApp");
+  const leftSplitter = document.getElementById("leftSplitter");
+  const rightSplitter = document.getElementById("rightSplitter");
+  if (!app || !leftSplitter || !rightSplitter) return;
 
-    if (!app || !leftSplitter || !rightSplitter) return;
+  let isDraggingLeft = false;
+  let isDraggingRight = false;
+  let leftWidth = 240;
+  let rightWidth = 500;
 
-    let isDraggingLeft = false;
-    let isDraggingRight = false;
-    let leftWidth = 240;
-    let rightWidth = 440;
+  function applyLayout() {
+    app.style.gridTemplateColumns = `${leftWidth}px 6px 1fr 6px ${rightWidth}px`;
+  }
 
-    function applyLayout() {
-        app.style.gridTemplateColumns = `${leftWidth}px 6px 1fr 6px ${rightWidth}px`;
+  leftSplitter.addEventListener("mousedown", () => {
+    isDraggingLeft = true;
+    leftSplitter.classList.add("dragging");
+  });
+
+  rightSplitter.addEventListener("mousedown", () => {
+    isDraggingRight = true;
+    rightSplitter.classList.add("dragging");
+  });
+
+  document.addEventListener("mouseup", () => {
+    isDraggingLeft = false;
+    isDraggingRight = false;
+    leftSplitter.classList.remove("dragging");
+    rightSplitter.classList.remove("dragging");
+  });
+
+  document.addEventListener("mousemove", (e) => {
+    if (isDraggingLeft) {
+      leftWidth = Math.max(190, Math.min(420, e.clientX));
+      applyLayout();
     }
+    if (isDraggingRight) {
+      const totalWidth = window.innerWidth;
+      rightWidth = Math.max(380, Math.min(820, totalWidth - e.clientX));
+      applyLayout();
+    }
+  });
 
-    leftSplitter.addEventListener("mousedown", () => {
-        isDraggingLeft = true;
-        leftSplitter.classList.add("dragging");
-    });
-
-    rightSplitter.addEventListener("mousedown", () => {
-        isDraggingRight = true;
-        rightSplitter.classList.add("dragging");
-    });
-
-    document.addEventListener("mouseup", () => {
-        isDraggingLeft = false;
-        isDraggingRight = false;
-        leftSplitter.classList.remove("dragging");
-        rightSplitter.classList.remove("dragging");
-    });
-
-    document.addEventListener("mousemove", (e) => {
-        if (isDraggingLeft) {
-            leftWidth = Math.max(180, Math.min(420, e.clientX));
-            applyLayout();
-        }
-
-        if (isDraggingRight) {
-            const totalWidth = window.innerWidth;
-            rightWidth = Math.max(320, Math.min(760, totalWidth - e.clientX));
-            applyLayout();
-        }
-    });
-
-    applyLayout();
+  applyLayout();
 }
 
 window.addEventListener("DOMContentLoaded", () => {
-    loadCurrentModel();
-    initSplitters();
+  disableLegacyLinks();
+  setIdleProgressCard();
+  loadCurrentModel();
+  initSplitters();
 });

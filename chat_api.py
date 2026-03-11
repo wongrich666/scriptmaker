@@ -654,6 +654,161 @@ CHAT_RESULT_STORE = {}
 _CHAT_STORE_LOCK = threading.Lock()
 _ALLOWED_CHAT_MODELS = {'deepseek', 'gemini', 'ollama'}
 
+STAGE_UI_META = {
+    "queued": {
+        "step": "已创建任务",
+        "running_title": "已收到你的需求",
+        "done_title": "任务已创建",
+        "default_running_message": "已收到你的需求，正在创建本次创作任务。",
+        "default_done_message": "创作任务已创建，马上开始搭建人物和剧情。",
+        "progress_running": 5,
+        "progress_done": 8,
+    },
+    "character_bible": {
+        "step": "人物设定",
+        "running_title": "正在搭建人物关系",
+        "done_title": "人物设定已完成",
+        "default_running_message": "我先帮你把人物关系搭起来，先确定主角、对手和关键配角。",
+        "default_done_message": "人物设定已完成，角色冲突已经建立。",
+        "progress_running": 18,
+        "progress_done": 30,
+    },
+    "plot_outline": {
+        "step": "剧情大纲",
+        "running_title": "正在搭建剧情骨架",
+        "done_title": "剧情大纲已完成",
+        "default_running_message": "现在开始搭剧情骨架，梳理故事主线、阶段推进和关键反转。",
+        "default_done_message": "剧情大纲已完成，主线结构已经清晰。",
+        "progress_running": 40,
+        "progress_done": 55,
+    },
+    "review_report": {
+        "step": "审核意见",
+        "running_title": "正在检查节奏和逻辑",
+        "done_title": "审核意见已完成",
+        "default_running_message": "我在检查这个方案的节奏、逻辑和商业化潜力。",
+        "default_done_message": "审核完成，已经整理出优化方向。",
+        "progress_running": 68,
+        "progress_done": 78,
+    },
+    "final_script": {
+        "step": "最终稿",
+        "running_title": "正在整合最终版本",
+        "done_title": "最终稿主体已生成",
+        "default_running_message": "正在整合前面的内容，生成最终版本。",
+        "default_done_message": "最终稿主体已经生成，正在做最后整理。",
+        "progress_running": 88,
+        "progress_done": 95,
+    },
+    "done": {
+        "step": "已完成",
+        "running_title": "正在收尾",
+        "done_title": "最终稿已完成",
+        "default_running_message": "正在做最后收尾。",
+        "default_done_message": "最终稿已完成，你现在可以查看完整内容。",
+        "progress_running": 98,
+        "progress_done": 100,
+    },
+    "failed": {
+        "step": "生成失败",
+        "running_title": "生成中断",
+        "done_title": "生成失败",
+        "default_running_message": "本次生成未能完成。",
+        "default_done_message": "本次生成未能完成。",
+        "progress_running": 0,
+        "progress_done": 0,
+    },
+}
+
+
+def _get_stage_ui(stage: str, status: str = "running") -> dict:
+    meta = STAGE_UI_META.get(stage) or {
+        "step": stage or "未知阶段",
+        "running_title": f"正在处理 {stage or '任务'}",
+        "done_title": f"{stage or '任务'} 已完成",
+        "default_running_message": "",
+        "default_done_message": "",
+        "progress_running": 0,
+        "progress_done": 0,
+    }
+
+    if status == "done":
+        return {
+            "step": meta["step"],
+            "title": meta.get("done_title", meta["running_title"]),
+            "message": meta.get("default_done_message", meta.get("default_running_message", "")),
+            "progress": meta.get("progress_done", meta.get("progress_running", 0)),
+        }
+
+    if status == "failed":
+        failed_meta = STAGE_UI_META["failed"]
+        return {
+            "step": failed_meta["step"],
+            "title": failed_meta["done_title"],
+            "message": failed_meta["default_done_message"],
+            "progress": failed_meta["progress_done"],
+        }
+
+    return {
+        "step": meta["step"],
+        "title": meta.get("running_title", meta["step"]),
+        "message": meta.get("default_running_message", ""),
+        "progress": meta.get("progress_running", 0),
+    }
+
+
+def _build_trace_item(stage: str, *, status: str = "running", message: str = "", preview: str = "") -> dict:
+    ui = _get_stage_ui(stage, status=status)
+    return {
+        "stage": stage,
+        "step": ui["step"],
+        "status": status,
+        "title": ui["title"],
+        "message": message or ui["message"],
+        "preview": preview or "",
+        "progress": ui["progress"],
+        "time": _utc_now_iso(),
+    }
+
+
+def _update_task_stage(task_id: str, stage: str, *, status: str = "running", message: str = "", error: str = ""):
+    ui = _get_stage_ui(stage, status=status)
+    return _update_task_record(
+        task_id,
+        status=status,
+        current_stage=stage,
+        current_title=ui["title"],
+        current_message=message or ui["message"],
+        progress=ui["progress"],
+        error=error or "",
+    )
+
+
+def _task_payload_view(task: dict) -> dict:
+    stage = task.get("current_stage") or "queued"
+    status = task.get("status") or "pending"
+
+    if status == "done":
+        ui = _get_stage_ui("done", status="done")
+    elif status == "failed":
+        ui = _get_stage_ui("failed", status="failed")
+    else:
+        ui = _get_stage_ui(stage, status="running")
+
+    return {
+        "task_id": task.get("task_id"),
+        "project_id": task.get("project_id"),
+        "status": status,
+        "current_stage": stage,
+        "current_title": task.get("current_title") or ui["title"],
+        "current_message": task.get("current_message") or ui["message"],
+        "progress": task.get("progress", ui["progress"]),
+        "error": task.get("error", ""),
+        "selected_model": task.get("selected_model"),
+        "created_at": task.get("created_at"),
+        "updated_at": task.get("updated_at"),
+    }
+
 
 def _utc_now_iso():
     return datetime.now(timezone.utc).isoformat()
@@ -723,26 +878,39 @@ def _update_task_record(task_id, **kwargs):
         return dict(task)
 
 
-def _append_trace(project_id, stage, summary):
-    item = {
-        'stage': stage,
-        'time': _utc_now_iso(),
-        'summary': summary,
-    }
+def _append_trace(project_id, stage, message="", *, status="running", preview=""):
+    item = _build_trace_item(
+        stage=stage,
+        status=status,
+        message=message,
+        preview=preview,
+    )
     with _CHAT_STORE_LOCK:
         CHAT_TRACE_STORE.setdefault(project_id, []).append(item)
     return item
 
 
-def _set_project_result(project_id, *, final_script='', character_bible='', plot_outline='', review_report=''):
+def _set_project_result(project_id, *, final_script=None, character_bible=None, plot_outline=None, review_report=None):
     with _CHAT_STORE_LOCK:
-        CHAT_RESULT_STORE[project_id] = {
-            'final_script': final_script or '',
-            'character_bible': character_bible or '',
-            'plot_outline': plot_outline or '',
-            'review_report': review_report or '',
-            'updated_at': _utc_now_iso(),
+        existing = CHAT_RESULT_STORE.get(project_id) or {}
+        merged = {
+            "final_script": existing.get("final_script", ""),
+            "character_bible": existing.get("character_bible", ""),
+            "plot_outline": existing.get("plot_outline", ""),
+            "review_report": existing.get("review_report", ""),
+            "updated_at": _utc_now_iso(),
         }
+
+        if final_script is not None:
+            merged["final_script"] = final_script
+        if character_bible is not None:
+            merged["character_bible"] = character_bible
+        if plot_outline is not None:
+            merged["plot_outline"] = plot_outline
+        if review_report is not None:
+            merged["review_report"] = review_report
+
+        CHAT_RESULT_STORE[project_id] = merged
 
 
 def _get_project_result(project_id):
@@ -798,15 +966,63 @@ def _ensure_project_for_user(project_id, user_id, user_message, meta=None):
 def _save_project_artifacts(project_id, *, user_message, final_script, character_bible, plot_outline, review_report):
     script = ScriptModel.query.get(project_id)
     if not script:
-        raise ValueError(f'项目不存在：{project_id}')
+        raise ValueError(f"项目不存在：{project_id}")
 
-    script.background = user_message or script.background or ''
-    script.content = final_script or ''
-    script.characters = character_bible or ''
-    script.outline = plot_outline or ''
-    script.knowledge = review_report or ''
+    script.background = user_message or script.background or ""
+    script.content = final_script or ""
+    script.characters = character_bible or ""
+    script.outline = plot_outline or ""
+    script.knowledge = review_report or ""
     script.updated_at = datetime.utcnow()
     db.session.commit()
+
+    _set_project_result(
+        project_id,
+        final_script=final_script,
+        character_bible=character_bible,
+        plot_outline=plot_outline,
+        review_report=review_report,
+    )
+
+
+def _save_partial_artifacts(
+    project_id,
+    *,
+    user_message=None,
+    final_script=None,
+    character_bible=None,
+    plot_outline=None,
+    review_report=None,
+):
+    script = ScriptModel.query.get(project_id)
+    if not script:
+        raise ValueError(f"项目不存在：{project_id}")
+
+    changed = False
+
+    if user_message is not None and (not script.background):
+        script.background = user_message or ""
+        changed = True
+
+    if final_script is not None:
+        script.content = final_script or ""
+        changed = True
+
+    if character_bible is not None:
+        script.characters = character_bible or ""
+        changed = True
+
+    if plot_outline is not None:
+        script.outline = plot_outline or ""
+        changed = True
+
+    if review_report is not None:
+        script.knowledge = review_report or ""
+        changed = True
+
+    if changed:
+        script.updated_at = datetime.utcnow()
+        db.session.commit()
 
     _set_project_result(
         project_id,
@@ -902,46 +1118,141 @@ def _build_final_script_prompt(user_message, word_count_wan, character_bible, pl
 
 
 def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, selected_model):
+    stage_being_processed = "queued"
+
     with app.app_context():
         try:
-            word_count_wan = meta.get('word_count_wan', 2)
+            word_count_wan = meta.get("word_count_wan", 2)
             try:
                 word_count_wan = float(word_count_wan)
             except Exception:
                 word_count_wan = 2
 
-            _update_task_record(task_id, status='running', current_stage='character_bible')
-            _append_trace(project_id, 'character_bible', '开始生成人物设定')
+            # 1) 人物设定
+            stage_being_processed = "character_bible"
+            _update_task_stage(
+                task_id,
+                "character_bible",
+                status="running",
+                message="我先帮你把人物关系搭起来，先确定主角、核心对手和关键配角。",
+            )
+            _append_trace(
+                project_id,
+                "character_bible",
+                "我先帮你把人物关系搭起来，先确定主角、核心对手和关键配角。",
+                status="running",
+            )
             character_bible = _call_api_for_chat(
                 _build_character_prompt(user_message, word_count_wan),
                 selected_model=selected_model,
             )
-            _append_trace(project_id, 'character_bible', _safe_preview(character_bible))
+            _save_partial_artifacts(
+                project_id,
+                user_message=user_message,
+                character_bible=character_bible,
+            )
+            _append_trace(
+                project_id,
+                "character_bible",
+                "人物设定已完成，角色冲突已经建立。",
+                status="done",
+                preview=_safe_preview(character_bible, 180),
+            )
 
-            _update_task_record(task_id, status='running', current_stage='plot_outline')
-            _append_trace(project_id, 'plot_outline', '开始生成剧情大纲')
+            # 2) 剧情大纲
+            stage_being_processed = "plot_outline"
+            _update_task_stage(
+                task_id,
+                "plot_outline",
+                status="running",
+                message="现在开始搭剧情骨架，梳理故事主线、阶段推进和关键反转。",
+            )
+            _append_trace(
+                project_id,
+                "plot_outline",
+                "现在开始搭剧情骨架，梳理故事主线、阶段推进和关键反转。",
+                status="running",
+            )
             plot_outline = _call_api_for_chat(
                 _build_outline_prompt(user_message, word_count_wan, character_bible),
                 selected_model=selected_model,
             )
-            _append_trace(project_id, 'plot_outline', _safe_preview(plot_outline))
+            _save_partial_artifacts(
+                project_id,
+                user_message=user_message,
+                plot_outline=plot_outline,
+            )
+            _append_trace(
+                project_id,
+                "plot_outline",
+                "剧情大纲已完成，主线结构已经清晰。",
+                status="done",
+                preview=_safe_preview(plot_outline, 180),
+            )
 
-            _update_task_record(task_id, status='running', current_stage='review_report')
-            _append_trace(project_id, 'review_report', '开始生成审核报告')
+            # 3) 审核意见
+            stage_being_processed = "review_report"
+            _update_task_stage(
+                task_id,
+                "review_report",
+                status="running",
+                message="我在检查这个方案的节奏、逻辑和商业化潜力。",
+            )
+            _append_trace(
+                project_id,
+                "review_report",
+                "我在检查这个方案的节奏、逻辑和商业化潜力。",
+                status="running",
+            )
             review_report = _call_api_for_chat(
                 _build_review_prompt(user_message, character_bible, plot_outline),
                 selected_model=selected_model,
             )
-            _append_trace(project_id, 'review_report', _safe_preview(review_report))
+            _save_partial_artifacts(
+                project_id,
+                user_message=user_message,
+                review_report=review_report,
+            )
+            _append_trace(
+                project_id,
+                "review_report",
+                "审核完成，已经整理出优化方向。",
+                status="done",
+                preview=_safe_preview(review_report, 180),
+            )
 
-            _update_task_record(task_id, status='running', current_stage='final_script')
-            _append_trace(project_id, 'final_script', '开始生成最终稿')
+            # 4) 最终稿
+            stage_being_processed = "final_script"
+            _update_task_stage(
+                task_id,
+                "final_script",
+                status="running",
+                message="正在整合前面的内容，生成最终版本。",
+            )
+            _append_trace(
+                project_id,
+                "final_script",
+                "正在整合前面的内容，生成最终版本。",
+                status="running",
+            )
             final_script = _call_api_for_chat(
                 _build_final_script_prompt(user_message, word_count_wan, character_bible, plot_outline, review_report),
                 selected_model=selected_model,
             )
-            _append_trace(project_id, 'final_script', _safe_preview(final_script))
+            _save_partial_artifacts(
+                project_id,
+                user_message=user_message,
+                final_script=final_script,
+            )
+            _append_trace(
+                project_id,
+                "final_script",
+                "最终稿主体已经生成，正在做最后整理。",
+                status="done",
+                preview=_safe_preview(final_script, 180),
+            )
 
+            # 5) 收尾
             _save_project_artifacts(
                 project_id,
                 user_message=user_message,
@@ -951,13 +1262,35 @@ def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, 
                 review_report=review_report,
             )
 
-            _update_task_record(task_id, status='done', current_stage='done', error='')
-            _append_trace(project_id, 'done', '任务完成')
+            _update_task_stage(
+                task_id,
+                "done",
+                status="done",
+                message="最终稿已完成，你现在可以查看完整内容。",
+            )
+            _append_trace(
+                project_id,
+                "done",
+                "最终稿已完成，你现在可以查看完整内容。",
+                status="done",
+            )
 
         except Exception as e:
-            logging.exception('Chat 任务执行失败 task_id=%s project_id=%s', task_id, project_id)
-            _update_task_record(task_id, status='failed', current_stage='failed', error=str(e))
-            _append_trace(project_id, 'failed', f'任务失败：{str(e)}')
+            logging.exception("Chat 任务执行失败 task_id=%s project_id=%s", task_id, project_id)
+            _update_task_record(
+                task_id,
+                status="failed",
+                current_stage=stage_being_processed,
+                current_title="本次生成未完成",
+                current_message=str(e),
+                error=str(e),
+            )
+            _append_trace(
+                project_id,
+                stage_being_processed,
+                f"这一阶段未能完成：{str(e)}",
+                status="failed",
+            )
 
 
 @api.route('/model/current', methods=['GET'])
@@ -1020,6 +1353,7 @@ def chat_send():
 
         project_id = script.id
         task_id = uuid.uuid4().hex
+
         _create_task_record(
             task_id=task_id,
             project_id=project_id,
@@ -1028,7 +1362,23 @@ def chat_send():
             user_message=user_message,
             meta=meta,
         )
-        _append_trace(project_id, 'queued', f'任务已创建，使用模型：{selected_model}')
+
+        _update_task_record(
+            task_id,
+            status='pending',
+            current_stage='queued',
+            current_title='已收到你的需求',
+            current_message='已收到你的需求，正在创建本次创作任务。',
+            progress=5,
+            error='',
+        )
+
+        _append_trace(
+            project_id,
+            'queued',
+            '已收到你的需求，正在创建本次创作任务。',
+            status='done',
+        )
 
         app = current_app._get_current_object()
         worker = threading.Thread(
@@ -1038,14 +1388,15 @@ def chat_send():
         )
         worker.start()
 
-        _update_task_record(task_id, status='pending', current_stage='queued')
-
         return jsonify({
             'success': True,
             'task_id': task_id,
             'project_id': project_id,
             'status': 'pending',
             'current_stage': 'queued',
+            'current_title': '已收到你的需求',
+            'current_message': '已收到你的需求，正在创建本次创作任务。',
+            'progress': 5,
             'selected_model': selected_model,
         })
     except Exception as e:
@@ -1062,42 +1413,25 @@ def get_chat_task(task_id):
     if task.get('user_id') != current_user.id:
         return jsonify({'success': False, 'message': '您没有权限访问该任务'}), 403
 
-    return jsonify({
-        'success': True,
-        'task_id': task.get('task_id'),
-        'project_id': task.get('project_id'),
-        'status': task.get('status'),
-        'current_stage': task.get('current_stage'),
-        'error': task.get('error', ''),
-        'selected_model': task.get('selected_model'),
-        'created_at': task.get('created_at'),
-        'updated_at': task.get('updated_at'),
-    })
+    payload = _task_payload_view(task)
+    payload['success'] = True
+    return jsonify(payload)
 
 
-@api.route('/chat/project/<int:project_id>/artifacts', methods=['GET'])
+@api.route('/chat/project/<int:project_id>/trace', methods=['GET'])
 @login_required
-def get_project_artifacts(project_id):
+def get_project_trace(project_id):
     script = ScriptModel.query.get_or_404(project_id)
     if script.user_id != current_user.id:
         return jsonify({'success': False, 'message': '您没有权限访问该项目'}), 403
 
-    result = _get_project_result(project_id)
-    if not result:
-        result = {
-            'final_script': script.content or '',
-            'character_bible': script.characters or '',
-            'plot_outline': script.outline or '',
-            'review_report': script.knowledge or '',
-        }
+    with _CHAT_STORE_LOCK:
+        trace = list(CHAT_TRACE_STORE.get(project_id) or [])
 
     return jsonify({
         'success': True,
         'project_id': project_id,
-        'final_script': result.get('final_script', ''),
-        'character_bible': result.get('character_bible', ''),
-        'plot_outline': result.get('plot_outline', ''),
-        'review_report': result.get('review_report', ''),
+        'trace': trace,
     })
 
 

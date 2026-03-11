@@ -17,6 +17,25 @@ git commit -m "本次修改的说明，比如：优化脚本生成逻辑"
 4. 推送到 GitHub（对应 Ctrl+Shift+K）
 git push origin main
 """
+
+"""
+1. 更新 GitHub 本地仓库
+进入你的 Git 仓库目录，确认当前的修改（文件名变更等）：
+git status
+你应该会看到文件名变化（例如 api.py 被重命名为 chat_api.py）以及任何其他的修改。
+
+2. 提交本地修改
+首先，添加所有更改到暂存区：
+git add -A
+然后，提交更改：
+git commit -m "Renamed api.py to chat_api.py and updated relevant changes"
+
+3. 推送到 GitHub
+将本地提交推送到 GitHub 上：
+git push origin main
+（如果你使用的是其他分支，替换 main 为相应的分支名称。）
+"""
+
 from werkzeug.exceptions import HTTPException
 from common import create_app, init_login, db
 from models import init_models
