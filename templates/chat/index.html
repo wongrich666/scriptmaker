@@ -1,89 +1,143 @@
-.main-header-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 20px;
-    flex-wrap: wrap;
-}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScriptMaker 聊天创作台</title>
+    <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}">
+</head>
+<body>
+<div class="chat-app" id="chatApp">
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h2>ScriptMaker</h2>
+            <p>内部剧本创作入口</p>
+        </div>
+        <div class="sidebar-section">
+            <button id="newChatBtn" class="primary-btn">新建对话</button>
+        </div>
+        <div class="sidebar-section">
+            <h3>当前任务</h3>
+            <div id="projectInfo">
+                <div>project_id：<span id="projectIdText">未创建</span></div>
+                <div>task_id：<span id="taskIdText">未开始</span></div>
+                <div>状态：<span id="taskStatusText">空闲</span></div>
+                <div>当前模型：<span id="currentModelText">未加载</span></div>
+            </div>
+        </div>
+    </aside>
 
-.header-controls {
-    display: flex;
-    gap: 16px;
-    align-items: center;
-    flex-wrap: wrap;
-}
+    <div class="splitter" id="leftSplitter"></div>
 
-.inline-field {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
+    <main class="main-panel" id="mainPanel">
+        <header class="main-header">
+            <div class="main-header-top">
+                <div>
+                    <h1>剧本创作智能体</h1>
+                    <p>输入需求，系统自动生成：人设 / 剧情 / 审核报告 / 最终结果</p>
+                </div>
 
-.inline-field label {
-    font-size: 13px;
-    color: #c8d2e4;
-    font-weight: bold;
-}
+                <div class="header-controls">
+                    <div class="inline-field">
+                        <label for="modelSelect">模型</label>
+                        <select id="modelSelect">
+                            <option value="deepseek">DeepSeek</option>
+                            <option value="gemini">Gemini</option>
+                            <option value="ollama">Ollama</option>
+                        </select>
+                    </div>
 
-.inline-field input,
-.inline-field select {
-    min-width: 120px;
-    border: 1px solid #313949;
-    border-radius: 8px;
-    padding: 10px;
-    font-size: 14px;
-    background: #1b1f27;
-    color: #f5f6fa;
-}
+                    <div class="inline-field">
+                        <label for="wordCountInput">字数（万字）</label>
+                        <input id="wordCountInput" type="number" min="0.5" max="20" step="0.5" value="2">
+                    </div>
+                </div>
+            </div>
+        </header>
 
-.inline-field input[type="number"] {
-    width: 120px;
-}
+        <section class="rule-box">
+            <h3>输入规则</h3>
+            <ol>
+                <li>至少写清楚：题材倾向 + 核心冲突 + 想要的感觉</li>
+                <li>如果你写得少，系统会自动补全分类、风格和创作方向</li>
+                <li>默认按 2 万字短篇小说处理</li>
+            </ol>
+        </section>
 
-.simple-form {
-    display: grid;
-    gap: 14px;
-}
+        <section id="messageList" class="message-list">
+            <div class="message system">
+                <div class="bubble">你好，请输入你的创作需求。
+                </div>
+            </div>
+        </section>
 
-.field-column {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
+        <section class="composer">
+            <div class="simple-form">
+                <div class="field-column">
+                    <label for="messageInput">用户输入</label>
+                    <textarea id="messageInput" placeholder="请输入你的剧本需求"></textarea>
+                </div>
+            </div>
 
-.field-column label {
-    font-size: 14px;
-    font-weight: bold;
-    color: #dbe3f0;
-}
+            <div class="composer-actions">
+                <button id="sendBtn" class="primary-btn">发送需求</button>
+            </div>
+        </section>
+    </main>
 
-.splitter {
-    width: 6px;
-    cursor: col-resize;
-    background: #111827;
-    border-left: 1px solid #1f2937;
-    border-right: 1px solid #1f2937;
-}
+    <div class="splitter" id="rightSplitter"></div>
 
-.splitter:hover,
-.splitter.dragging {
-    background: #2563eb;
-}
+    <aside class="result-panel" id="resultPanel">
+        <div class="result-header">
+            <h2>结果详情</h2>
+        </div>
 
-.chat-app {
-    display: grid;
-    grid-template-columns: 260px 6px 1fr 6px 420px;
-    height: 100vh;
-    min-width: 1200px;
-}
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="final">最终剧本</button>
+            <button class="tab-btn" data-tab="character">人物设定</button>
+            <button class="tab-btn" data-tab="outline">剧情大纲</button>
+            <button class="tab-btn" data-tab="review">审核报告</button>
+            <button class="tab-btn" data-tab="trace">生成过程</button>
+        </div>
 
-.sidebar, .result-panel {
-    overflow: auto;
-}
+        <div class="tab-content active" id="tab-final">
+            <pre id="finalScriptBox">暂无内容</pre>
+        </div>
 
-.main-panel {
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-}
+        <div class="tab-content" id="tab-character">
+            <pre id="characterBox">暂无内容</pre>
+        </div>
+
+        <div class="tab-content" id="tab-outline">
+            <pre id="outlineBox">暂无内容</pre>
+        </div>
+
+        <div class="tab-content" id="tab-review">
+            <pre id="reviewBox">暂无内容</pre>
+        </div>
+
+        <div class="tab-content" id="tab-trace">
+            <pre id="traceBox">暂无内容</pre>
+        </div>
+    </aside>
+</div>
+
+<script>
+    window.chatConfig = {
+        sendUrl: "/api/chat/send",
+        taskBaseUrl: "/api/task/",
+        projectBaseUrl: "/api/project/",
+        modelCurrentUrl: "/api/model/current",
+        modelSelectUrl: "/api/model/select"
+    };
+</script>
+<script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+</body>
+</html>
+
+
+
+
+
+

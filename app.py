@@ -17,7 +17,7 @@ git commit -m "本次修改的说明，比如：优化脚本生成逻辑"
 4. 推送到 GitHub（对应 Ctrl+Shift+K）
 git push origin main
 """
-
+from werkzeug.exceptions import HTTPException
 from common import create_app, init_login, db
 from models import init_models
 from auth import auth
@@ -108,7 +108,11 @@ def create_app_with_blueprints():
         @app.errorhandler(Exception)
         def handle_exception(e):
             import traceback
-            from flask import jsonify, request
+            from flask import jsonify, request, render_template_string
+
+            # 先放行 404 / 405 / 403 等 HTTP 错误
+            if isinstance(e, HTTPException):
+                return e
 
             error_traceback = traceback.format_exc()
             logging.error(f"发生错误: {str(e)}\n{error_traceback}")
@@ -122,7 +126,6 @@ def create_app_with_blueprints():
                 }), 500
 
             # 普通页面返回 HTML 错误页
-            from flask import render_template_string
             return render_template_string('''
                 <!DOCTYPE html>
                 <html>
