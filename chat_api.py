@@ -1435,18 +1435,3 @@ def get_project_trace(project_id):
     })
 
 
-@api.route('/chat/project/<int:project_id>/trace', methods=['GET'])
-@login_required
-def get_project_trace(project_id):
-    script = ScriptModel.query.get_or_404(project_id)
-    if script.user_id != current_user.id:
-        return jsonify({'success': False, 'message': '您没有权限访问该项目'}), 403
-
-    with _CHAT_STORE_LOCK:
-        trace = list(CHAT_TRACE_STORE.get(project_id) or [])
-
-    return jsonify({
-        'success': True,
-        'project_id': project_id,
-        'trace': trace,
-    })
