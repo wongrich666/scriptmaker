@@ -747,35 +747,6 @@ def optimize_character():
             'message': str(e)
         })
 
-@api.route('/model/current', methods=['GET'])
-@login_required
-def get_current_model():
-    """获取当前选择的模型"""
-    current_model = session.get('selected_model', API or 'deepseek')
-    return jsonify({
-        'success': True,
-        'model': current_model
-    })
-
-@api.route('/model/set', methods=['POST'])
-@login_required
-def set_current_model():
-    """设置当前选择的模型"""
-    data = request.get_json()
-    model = data.get('model')
-    
-    if model not in ['deepseek', 'gemini']:
-        return jsonify({
-            'success': False,
-            'message': '不支持的模型类型'
-        })
-    
-    session['selected_model'] = model
-    return jsonify({
-        'success': True,
-        'model': model,
-        'message': f'已切换到 {model}'
-    })
 
 @api.route('/validate_content', methods=['GET'])
 @login_required
