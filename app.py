@@ -1,3 +1,7 @@
+"""
+github地址  https://github.com/wongrich666/scriptmaker.git
+ctrl K提交，ctrl shift K上传
+"""
 from common import create_app, init_login, db
 from models import init_models
 from auth import auth

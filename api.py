@@ -141,7 +141,7 @@
 # 已被标记为 deprecated。
 #
 # 推荐把：
-#    datetime.utcnow().isoformat()
+#    datetime.now(timezone.utc).isoformat()
 #
 # 改成：
 #    datetime.now(timezone.utc).isoformat()
@@ -159,7 +159,7 @@ import json
 import re
 import requests
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import current_app
 
 from urllib.parse import urlparse
@@ -859,6 +859,7 @@ def validate_content():
 # =========================
 # 任务内存存储（MVP 版）
 # 注意：这是内存存储，服务重启后会丢失
+DEFAULT_WORD_COUNT = "2万字以内（短篇）"
 CHAT_TASK_STORE = {}
 CHAT_TASK_LOCK = threading.Lock()
 
@@ -867,6 +868,7 @@ def _set_chat_task(task_id, **kwargs):
     """线程安全地更新任务状态"""
     with CHAT_TASK_LOCK:
         task = CHAT_TASK_STORE.get(task_id, {})
+        task["task_id"] = task_id
         task.update(kwargs)
         CHAT_TASK_STORE[task_id] = task
 
@@ -875,6 +877,36 @@ def _get_chat_task(task_id):
     """线程安全地读取任务状态"""
     with CHAT_TASK_LOCK:
         return CHAT_TASK_STORE.get(task_id)
+
+
+def _normalize_tag_list(value):
+    """把字符串 / 列表统一转成去重后的字符串列表"""
+    if value is None:
+        return []
+
+    if isinstance(value, list):
+        raw = value
+    elif isinstance(value, str):
+        raw = re.split(r"[，,、/|；;]+", value)
+    else:
+        raw = [str(value)]
+
+    result = []
+    seen = set()
+    for item in raw:
+        text = str(item).strip()
+        if not text:
+            continue
+        if text not in seen:
+            seen.add(text)
+            result.append(text)
+    return result
+
+
+def _normalize_word_count(value):
+    """用户不填时，默认按短篇小说处理"""
+    text = (value or "").strip()
+    return text if text else DEFAULT_WORD_COUNT
 
 
 def _detect_input_mode(message, meta):
@@ -896,19 +928,49 @@ def _detect_input_mode(message, meta):
 
 def _build_story_brief(message, meta, mode, user_id, project_id=None):
     """总编剧：统一整理需求书"""
+
+    main_categories = _normalize_tag_list(meta.get("main_categories"))
+    theme_tags = _normalize_tag_list(meta.get("theme_tags"))
+    character_tags = _normalize_tag_list(meta.get("character_tags"))
+    plot_tags = _normalize_tag_list(meta.get("plot_tags"))
+    style_tags = _normalize_tag_list(meta.get("style_tags"))
+
+    # 兼容旧字段
+    legacy_genre = (meta.get("genre") or "").strip()
+    legacy_style = (meta.get("style") or "").strip()
+
+    if not main_categories and legacy_genre:
+        main_categories = _normalize_tag_list(legacy_genre)
+
+    if not style_tags and legacy_style:
+        style_tags = _normalize_tag_list(legacy_style)
+
+    genre_text = "、".join(main_categories) if main_categories else "未指定"
+    style_text = "、".join(style_tags) if style_tags else (legacy_style or "未指定")
+
     return {
         "project_id": project_id,
         "user_id": user_id,
         "mode": mode,
         "user_message": (message or "").strip(),
-        "genre": (meta.get("genre") or "").strip(),
-        "style": (meta.get("style") or "").strip(),
-        "word_count": (meta.get("word_count") or "").strip(),
+
+        # 结构化字段
+        "main_categories": main_categories,
+        "theme_tags": theme_tags,
+        "character_tags": character_tags,
+        "plot_tags": plot_tags,
+        "style_tags": style_tags,
+
+        # 兼容旧 prompt 的字符串字段
+        "genre": genre_text,
+        "style": style_text,
+
+        "word_count": _normalize_word_count(meta.get("word_count")),
         "reference_text": (meta.get("reference_text") or "").strip(),
         "framework_text": (meta.get("framework_text") or "").strip(),
         "banned": (meta.get("banned") or "").strip(),
         "output_granularity": (meta.get("output_granularity") or "outline").strip(),
-        "created_at": datetime.utcnow().isoformat()
+        "created_at": datetime.now(timezone.utc).isoformat()
     }
 
 
@@ -1014,29 +1076,38 @@ def _call_api_for_chat(prompt, selected_model=None):
 def _generate_character_bible(story_brief, selected_model=None):
     """编剧 A：生成角色设定"""
     prompt = f"""
-你是编剧A（人物编剧）。
-请根据下面的需求书，输出结构化的人物设定。
+    你是编剧A（人物编剧）。
+    请根据下面的需求书，输出结构化的人物设定。
 
-【需求书】
-模式：{story_brief['mode']}
-题材：{story_brief['genre']}
-风格：{story_brief['style']}
-字数/集数要求：{story_brief['word_count']}
-用户需求：{story_brief['user_message']}
-参考内容：{story_brief['reference_text']}
-框架内容：{story_brief['framework_text']}
-禁止项：{story_brief['banned']}
+    【需求书】
+    模式：{story_brief['mode']}
+    主分类：{'、'.join(story_brief['main_categories']) if story_brief['main_categories'] else '未指定'}
+    主题标签：{'、'.join(story_brief['theme_tags']) if story_brief['theme_tags'] else '未指定'}
+    角色标签：{'、'.join(story_brief['character_tags']) if story_brief['character_tags'] else '未指定'}
+    情节标签：{'、'.join(story_brief['plot_tags']) if story_brief['plot_tags'] else '未指定'}
+    综合风格：{story_brief['style']}
+    字数/集数要求：{story_brief['word_count']}
+    用户需求：{story_brief['user_message']}
+    参考内容：{story_brief['reference_text']}
+    框架内容：{story_brief['framework_text']}
+    禁止项：{story_brief['banned']}
 
-请输出：
-1. 主角
-2. 核心配角
-3. 反派/对立面
-4. 人物关系
-5. 每个角色的欲望、弱点、成长线
-6. 角色卖点与情绪钩子
+    要求：
+    1. 允许多分类融合，但必须有主次，不要平均发力
+    2. 人物必须服务于主分类和核心冲突
+    3. 输出要偏短篇小说/短剧可执行，不要空泛设定
+    4. 如果标签存在冲突，优先保证“用户需求一句话”和主分类成立
 
-请用清晰的小标题输出。
-"""
+    请输出：
+    1. 主角
+    2. 核心配角
+    3. 反派/对立面
+    4. 人物关系
+    5. 每个角色的欲望、弱点、成长线
+    6. 角色卖点与情绪钩子
+
+    请用清晰的小标题输出。
+    """
 
     try:
         content = _call_api_for_chat(prompt, selected_model=selected_model)
@@ -1068,32 +1139,41 @@ def _generate_character_bible(story_brief, selected_model=None):
 def _generate_plot_outline(story_brief, character_bible, selected_model=None):
     """编剧 B：生成剧情大纲"""
     prompt = f"""
-你是编剧B（剧情编剧）。
-请基于用户需求和人物设定，输出适合短剧的剧情结构。
+    你是编剧B（剧情编剧）。
+    请基于用户需求和人物设定，输出适合短篇小说 / 短剧开发的剧情结构。
 
-【需求书】
-模式：{story_brief['mode']}
-题材：{story_brief['genre']}
-风格：{story_brief['style']}
-字数/集数要求：{story_brief['word_count']}
-用户需求：{story_brief['user_message']}
-禁止项：{story_brief['banned']}
+    【需求书】
+    模式：{story_brief['mode']}
+    主分类：{'、'.join(story_brief['main_categories']) if story_brief['main_categories'] else '未指定'}
+    主题标签：{'、'.join(story_brief['theme_tags']) if story_brief['theme_tags'] else '未指定'}
+    角色标签：{'、'.join(story_brief['character_tags']) if story_brief['character_tags'] else '未指定'}
+    情节标签：{'、'.join(story_brief['plot_tags']) if story_brief['plot_tags'] else '未指定'}
+    综合风格：{story_brief['style']}
+    字数/集数要求：{story_brief['word_count']}
+    用户需求：{story_brief['user_message']}
+    禁止项：{story_brief['banned']}
 
-【人物设定】
-{character_bible['raw_text']}
+    【人物设定】
+    {character_bible['raw_text']}
 
-请输出：
-1. 一句话 Logline
-2. 开头强钩子（前3秒/前30秒）
-3. 核心矛盾
-4. 剧情大纲（分阶段）
-5. 每集/每阶段钩子
-6. 关键反转
-7. 付费点/追更点
-8. 最终结局方向
+    要求：
+    1. 支持“都市 + 玄幻仙侠”这类多分类融合，但必须明确主线世界观
+    2. 默认按短篇小说体量组织结构，用户若明确指定再按其要求调整
+    3. 开头必须强钩子，尽快建立冲突和追更点
+    4. 不能只堆设定，必须有推进、反转、悬念
 
-请用清晰的小标题输出。
-"""
+    请输出：
+    1. 一句话 Logline
+    2. 开头强钩子（前3秒/前30秒）
+    3. 核心矛盾
+    4. 剧情大纲（分阶段）
+    5. 每集/每阶段钩子
+    6. 关键反转
+    7. 付费点/追更点
+    8. 最终结局方向
+
+    请用清晰的小标题输出。
+    """
 
     try:
         content = _call_api_for_chat(prompt, selected_model=selected_model)
@@ -1404,15 +1484,14 @@ def _run_chat_pipeline_async(flask_app, task_id, session_id, user_id, project_id
     with flask_app.app_context():
         try:
             _set_chat_task(
-                task_id,
                 task_id=task_id,
                 session_id=session_id,
                 project_id=project_id,
                 status="running",
                 current_stage="chief_editor",
                 progress=10,
-                created_at=datetime.utcnow().isoformat(),
-                updated_at=datetime.utcnow().isoformat(),
+                created_at=datetime.now(timezone.utc).isoformat(),
+                updated_at=datetime.now(timezone.utc).isoformat(),
                 artifacts=None,
                 trace=[]
             )
@@ -1423,7 +1502,7 @@ def _run_chat_pipeline_async(flask_app, task_id, session_id, user_id, project_id
             trace = [{
                 "stage": "chief_editor",
                 "summary": f"已识别模式：{mode}",
-                "time": datetime.utcnow().isoformat()
+                "time": datetime.now(timezone.utc).isoformat()
             }]
 
             script = _get_or_create_project(user_id, project_id, story_brief)
@@ -1435,7 +1514,7 @@ def _run_chat_pipeline_async(flask_app, task_id, session_id, user_id, project_id
                 status="running",
                 current_stage="character_writer",
                 progress=30,
-                updated_at=datetime.utcnow().isoformat(),
+                updated_at=datetime.now(timezone.utc).isoformat(),
                 trace=trace
             )
 
@@ -1443,7 +1522,7 @@ def _run_chat_pipeline_async(flask_app, task_id, session_id, user_id, project_id
             trace.append({
                 "stage": "character_writer",
                 "summary": character_bible["summary"],
-                "time": datetime.utcnow().isoformat()
+                "time": datetime.now(timezone.utc).isoformat()
             })
 
             _set_chat_task(
@@ -1452,7 +1531,7 @@ def _run_chat_pipeline_async(flask_app, task_id, session_id, user_id, project_id
                 status="running",
                 current_stage="plot_writer",
                 progress=55,
-                updated_at=datetime.utcnow().isoformat(),
+                updated_at=datetime.now(timezone.utc).isoformat(),
                 trace=trace
             )
 
@@ -1460,7 +1539,7 @@ def _run_chat_pipeline_async(flask_app, task_id, session_id, user_id, project_id
             trace.append({
                 "stage": "plot_writer",
                 "summary": plot_outline["summary"],
-                "time": datetime.utcnow().isoformat()
+                "time": datetime.now(timezone.utc).isoformat()
             })
 
             _set_chat_task(
@@ -1469,7 +1548,7 @@ def _run_chat_pipeline_async(flask_app, task_id, session_id, user_id, project_id
                 status="reviewing",
                 current_stage="reviewer",
                 progress=75,
-                updated_at=datetime.utcnow().isoformat(),
+                updated_at=datetime.now(timezone.utc).isoformat(),
                 trace=trace
             )
 
@@ -1477,7 +1556,7 @@ def _run_chat_pipeline_async(flask_app, task_id, session_id, user_id, project_id
             trace.append({
                 "stage": "reviewer",
                 "summary": review_report["summary"],
-                "time": datetime.utcnow().isoformat()
+                "time": datetime.now(timezone.utc).isoformat()
             })
 
             # 第一版：最多自动回修一次
@@ -1488,7 +1567,7 @@ def _run_chat_pipeline_async(flask_app, task_id, session_id, user_id, project_id
                     status="retrying",
                     current_stage="plot_writer",
                     progress=85,
-                    updated_at=datetime.utcnow().isoformat(),
+                    updated_at=datetime.now(timezone.utc).isoformat(),
                     trace=trace
                 )
 
@@ -1500,14 +1579,14 @@ def _run_chat_pipeline_async(flask_app, task_id, session_id, user_id, project_id
                 trace.append({
                     "stage": "plot_writer_retry",
                     "summary": plot_outline["summary"],
-                    "time": datetime.utcnow().isoformat()
+                    "time": datetime.now(timezone.utc).isoformat()
                 })
 
                 review_report = _review_artifacts(retry_brief, character_bible, plot_outline, selected_model=selected_model)
                 trace.append({
                     "stage": "reviewer_retry",
                     "summary": review_report["summary"],
-                    "time": datetime.utcnow().isoformat()
+                    "time": datetime.now(timezone.utc).isoformat()
                 })
 
                 story_brief = retry_brief
@@ -1521,7 +1600,7 @@ def _run_chat_pipeline_async(flask_app, task_id, session_id, user_id, project_id
                 status="done",
                 current_stage="done",
                 progress=100,
-                updated_at=datetime.utcnow().isoformat(),
+                updated_at=datetime.now(timezone.utc).isoformat(),
                 artifacts={
                     "story_brief": story_brief,
                     **artifacts
@@ -1535,7 +1614,7 @@ def _run_chat_pipeline_async(flask_app, task_id, session_id, user_id, project_id
                 status="failed",
                 current_stage="failed",
                 progress=100,
-                updated_at=datetime.utcnow().isoformat(),
+                updated_at=datetime.now(timezone.utc).isoformat(),
                 error=str(e),
                 traceback=traceback.format_exc()
             )
@@ -1564,14 +1643,13 @@ def chat_send():
 
     _set_chat_task(
         task_id,
-        task_id=task_id,
         session_id=session_id,
         project_id=project_id,
         status="pending",
         current_stage="queued",
         progress=0,
-        created_at=datetime.utcnow().isoformat(),
-        updated_at=datetime.utcnow().isoformat(),
+        created_at=datetime.now(timezone.utc).isoformat(),
+        updated_at=datetime.now(timezone.utc).isoformat(),
         trace=[],
         artifacts=None
     )
