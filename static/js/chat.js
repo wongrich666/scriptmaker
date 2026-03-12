@@ -47,6 +47,7 @@ const sendBtn = document.getElementById("sendBtn");
 const newChatBtn = document.getElementById("newChatBtn");
 const messageInput = document.getElementById("messageInput");
 const wordCountInput = document.getElementById("wordCountInput");
+const episodeCountInput = document.getElementById("episodeCountInput");
 const projectIdText = document.getElementById("projectIdText");
 const taskIdText = document.getElementById("taskIdText");
 const taskStatusText = document.getElementById("taskStatusText");
@@ -83,7 +84,7 @@ const modeSelect = document.getElementById("modeSelect");
 const referenceInput = document.getElementById("referenceInput");
 const frameworkInput = document.getElementById("frameworkInput");
 const bannedInput = document.getElementById("bannedInput");
-const episodeCountInput = document.getElementById("episodeCountInput");
+
 
 document.querySelectorAll(".tab-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -400,6 +401,11 @@ async function handleSend() {
     if (wordCountInput) wordCountInput.value = DEFAULT_WORD_COUNT_WAN;
   }
 
+  let episodeCount = episodeCountInput ? parseInt(episodeCountInput.value, 10) : 10;
+    if (Number.isNaN(episodeCount) || episodeCount <= 0) {
+      episodeCount = 10;
+      if (episodeCountInput) episodeCountInput.value = 10;
+    }
   if (sendBtn) sendBtn.disabled = true;
 
   lastTraceCount = 0;
