@@ -168,7 +168,7 @@ def build_structured_input_block(data: Dict[str, Any]) -> str:
             continue
         lines.append(f"")
         lines.append(_safe_text(value))
-        lines.append("")
+        lines.append(f"")
 
     return "\n".join(lines).strip()
 

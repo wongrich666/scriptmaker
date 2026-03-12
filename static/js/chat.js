@@ -454,7 +454,8 @@ async function handleSend() {
         mode: mode,
         reference_text: referenceText,
         framework_text: frameworkText,
-        banned: banned
+        banned: banned,
+        current_episode_no: currentEpisodeNo,
       }
     };
 

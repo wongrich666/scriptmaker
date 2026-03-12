@@ -159,6 +159,14 @@ def _normalize_chat_meta(meta):
     except Exception:
         episode_count = 10
 
+    try:
+        raw_current_episode_no = meta.get("current_episode_no", 1)
+        current_episode_no = int(raw_current_episode_no or 1)
+        if current_episode_no <= 0:
+            current_episode_no = 1
+    except Exception:
+        current_episode_no = 1
+
     return {
         "word_count_wan": word_count_wan,
         "genre": str(meta.get("genre") or "").strip(),
@@ -169,6 +177,7 @@ def _normalize_chat_meta(meta):
         "banned_items": _normalize_banned_items(meta.get("banned") or meta.get("banned_items")),
         "mode": str(meta.get("mode") or "").strip(),
         "episode_count": episode_count,
+        "current_episode_no": current_episode_no,
     }
 
 
@@ -213,13 +222,21 @@ def _build_http_session():
     return http_session
 
 
-def _build_single_episode_script_prompt(user_message, word_count_wan, character_bible, episode_plan, meta):
+def _build_single_episode_script_prompt(
+    user_message,
+    word_count_wan,
+    character_bible,
+    current_episode_plan,
+    current_episode_no,
+    meta,
+):
     data = _build_chat_prompt_data(
         user_message,
         word_count_wan,
         meta,
         history=character_bible,
-        current_episode_plan=episode_plan,
+        current_episode_plan=current_episode_plan,
+        current_episode_no=current_episode_no,
         source_text=user_message,
     )
     return compose_prompt("single_episode_script", data, mode=meta.get("mode"))
@@ -1238,7 +1255,7 @@ def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, 
                     preview=_safe_preview(character_bible, 180),
                 )
 
-                # 2) 先整理当前集计划（内部仍借助 episode_plan）
+                # 2) 当前集计划（内部借助 episode_plan）
                 stage_being_processed = "plot_outline"
                 _update_task_stage(
                     task_id,
@@ -1273,9 +1290,10 @@ def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, 
                     preview=_safe_preview(episode_plan, 180),
                 )
 
-                current_episode_plan = _extract_episode_plan_slice(episode_plan, 1)
+                current_episode_no = int(meta.get("current_episode_no", 1) or 1)
+                current_episode_plan = _extract_episode_plan_slice(episode_plan, current_episode_no)
 
-                # 3) 直接生成单集剧本
+                # 3) 单集正文
                 stage_being_processed = "final_script"
                 _update_task_stage(
                     task_id,
@@ -1291,16 +1309,17 @@ def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, 
                 )
 
                 final_script = _call_api_for_chat(
-                    _build_episode_script_prompt(
+                    _build_single_episode_script_prompt(
                         user_message,
                         word_count_wan,
                         character_bible,
                         current_episode_plan,
-                        1,
+                        current_episode_no,
                         meta,
                     ),
                     selected_model=selected_model,
                 )
+
                 _save_partial_artifacts(
                     project_id,
                     user_message=user_message,
@@ -1359,6 +1378,7 @@ def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, 
                     _build_scene_asset_extract_prompt(user_message, word_count_wan, meta),
                     selected_model=selected_model,
                 )
+
                 _save_partial_artifacts(
                     project_id,
                     user_message=user_message,
@@ -1463,7 +1483,39 @@ def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, 
                     preview=_safe_preview(plot_outline, 180),
                 )
 
-                # 3) 逐集生成正文合集
+                # 3) 可选审核（只保留在 review_report，不参与最终剧本格式）
+                stage_being_processed = "review_report"
+                _update_task_stage(
+                    task_id,
+                    "review_report",
+                    status="running",
+                    message="我先检查分集计划是否清晰、节奏是否合理。",
+                )
+                _append_trace(
+                    project_id,
+                    "review_report",
+                    "我先检查分集计划是否清晰、节奏是否合理。",
+                    status="running",
+                )
+
+                review_report = _call_api_for_chat(
+                    _build_review_prompt(user_message, character_bible, plot_outline, meta),
+                    selected_model=selected_model,
+                )
+                _save_partial_artifacts(
+                    project_id,
+                    user_message=user_message,
+                    review_report=review_report,
+                )
+                _append_trace(
+                    project_id,
+                    "review_report",
+                    "分集计划审核已完成。",
+                    status="done",
+                    preview=_safe_preview(review_report, 180),
+                )
+
+                # 4) 逐集生成正文合集（真正的最终剧本）
                 stage_being_processed = "final_script"
                 episode_count = _resolve_episode_count(meta, plot_outline)
 
@@ -1535,7 +1587,7 @@ def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, 
                     final_script=final_script,
                     character_bible=character_bible,
                     plot_outline=plot_outline,
-                    review_report="",
+                    review_report=review_report,
                 )
 
                 _update_task_stage(
