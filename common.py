@@ -30,7 +30,18 @@ def create_app():
     app.config['TRAP_HTTP_EXCEPTIONS'] = True
     
     logging.basicConfig(level=logging.DEBUG)
-    
+
+    # JSON 直接输出中文，不要变成 \u4e2d\u6587
+    app.config['JSON_AS_ASCII'] = False
+    app.config['JSON_SORT_KEYS'] = False
+
+    try:
+        # Flask 2.3+
+        app.json.ensure_ascii = False
+        app.json.sort_keys = False
+    except Exception:
+        pass
+
     # 初始化数据库
     db.init_app(app)
     

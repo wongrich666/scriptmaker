@@ -112,100 +112,119 @@ def edit_script(script_id):
 @login_required
 def export_story_txt(script_id):
     script = ScriptModel.query.get_or_404(script_id)
+
     if script.user_id != current_user.id:
         flash('您没有权限导出此故事')
         return redirect(url_for('dashboard.index'))
-    
-    # 获取所有章节
-    chapters = ChapterModel.query.filter_by(script_id=script_id).order_by(ChapterModel.number).all()
-    
-    # 创建导出内容
-    content = f"《{script.title}》\n\n"
-    
-    # 添加章节内容
-    for chapter in chapters:
-        content += f"\n第{chapter.number}章 {chapter.title}\n\n"
-        # 检查chapter_content是否存在且不为空
-        if hasattr(chapter, 'chapter_content') and chapter.chapter_content:
-            content += chapter.chapter_content + "\n"
-        else:
-            # 如果没有chapter_content字段或为空，尝试使用content字段
-            content += getattr(chapter, 'content', '(章节内容为空)') + "\n"
-    
-    # 使用RFC 5987编码文件名，解决中文文件名问题
+
+    parts = [f"《{script.title}》", ""]
+
+    if script.background:
+        parts.extend([
+            "【用户需求 / 背景】",
+            script.background.strip(),
+            ""
+        ])
+
+    if script.outline:
+        parts.extend([
+            "【剧情大纲】",
+            script.outline.strip(),
+            ""
+        ])
+
+    if script.characters:
+        parts.extend([
+            "【人物设定】",
+            script.characters.strip(),
+            ""
+        ])
+
+    if script.knowledge:
+        parts.extend([
+            "【审核意见】",
+            script.knowledge.strip(),
+            ""
+        ])
+
+    # 兜底：如果前面都没有，就放最终稿
+    if not script.outline and script.content:
+        parts.extend([
+            "【最终稿】",
+            script.content.strip(),
+            ""
+        ])
+
+    content = "\n".join(parts).strip() + "\n"
+
     safe_filename = urllib.parse.quote(f"{script.title}_故事内容.txt")
-    
     headers = {
         "Content-Disposition": f"attachment; filename*=UTF-8''{safe_filename}",
         "Content-Type": "text/plain; charset=utf-8"
     }
-    
+
     response = Response(
         content.encode('utf-8'),
         mimetype="text/plain; charset=utf-8",
         headers=headers
     )
-    
-    # 添加额外的下载触发标志
     response.headers["X-Download-Options"] = "noopen"
     response.headers["X-Content-Type-Options"] = "nosniff"
-    
     return response
 
 @dashboard.route('/script/<int:script_id>/export_script_txt', methods=['GET'])
 @login_required
 def export_script_txt(script_id):
     script = ScriptModel.query.get_or_404(script_id)
+
     if script.user_id != current_user.id:
         flash('您没有权限导出此剧本')
         return redirect(url_for('dashboard.index'))
-    
-    # 获取所有章节
-    chapters = ChapterModel.query.filter_by(script_id=script_id).order_by(ChapterModel.number).all()
-    
-    # 获取所有角色
-    characters = CharacterModel.query.filter_by(script_id=script_id).all()
-    
-    # 创建导出内容
-    content = f"《{script.title}》剧本\n\n"
-    
-    # 添加角色列表
-    if characters:
-        content += "【角色表】\n\n"
-        for character in characters:
-            content += f"{character.name}: {character.gender}, {character.age}岁\n"
-            if character.description:
-                content += f"描述: {character.description}\n"
-            content += "\n"
-    
-    # 添加章节内容
-    for chapter in chapters:
-        content += f"\n第{chapter.number}章 {chapter.title}\n\n"
-        # 检查chapter_script是否存在且不为空
-        if hasattr(chapter, 'chapter_script') and chapter.chapter_script:
-            content += chapter.chapter_script + "\n"
-        else:
-            # 如果没有chapter_script字段或为空，添加提示
-            content += "(章节剧本内容为空)\n"
-    
-    # 使用RFC 5987编码文件名，解决中文文件名问题
+
+    parts = [f"《{script.title}》剧本", ""]
+
+    if script.content:
+        parts.extend([
+            "【最终剧本】",
+            script.content.strip(),
+            ""
+        ])
+    else:
+        # 兜底：没有最终稿时，尽量导出已有结果
+        if script.characters:
+            parts.extend([
+                "【人物设定】",
+                script.characters.strip(),
+                ""
+            ])
+        if script.outline:
+            parts.extend([
+                "【剧情大纲】",
+                script.outline.strip(),
+                ""
+            ])
+        if script.knowledge:
+            parts.extend([
+                "【审核意见】",
+                script.knowledge.strip(),
+                ""
+            ])
+
+    content = "\n".join(parts).strip() + "\n"
+
     safe_filename = urllib.parse.quote(f"{script.title}_剧本.txt")
-    
     headers = {
         "Content-Disposition": f"attachment; filename*=UTF-8''{safe_filename}",
         "Content-Type": "text/plain; charset=utf-8"
     }
-    
+
     response = Response(
         content.encode('utf-8'),
         mimetype="text/plain; charset=utf-8",
         headers=headers
     )
-    
-    # 添加额外的下载触发标志
     response.headers["X-Download-Options"] = "noopen"
     response.headers["X-Content-Type-Options"] = "nosniff"
-    
     return response
 
 @dashboard.route('/script/<int:script_id>/delete', methods=['POST'])

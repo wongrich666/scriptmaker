@@ -33,9 +33,9 @@ LEGACY_FALLBACK = {
 }
 
 MODEL_MANIFEST = {
-    "reskin_longform": "models/reskin_longform.txt",
-    "short_drama_cn": "models/short_drama_cn.txt",
-    "novel_serial": "models/novel_serial.txt",
+    "reskin_longform": "modes/reskin_longform.txt",
+    "short_drama_cn": "modes/short_drama_cn.txt",
+    "novel_serial": "modes/novel_serial.txt",
     "": None,
     None: None,
 }
