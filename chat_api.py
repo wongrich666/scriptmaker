@@ -32,6 +32,12 @@ from io import BytesIO
 from werkzeug.utils import secure_filename
 from bs4 import BeautifulSoup
 from pypdf import PdfReader
+from prompt_runtime import (
+    compose_prompt,
+    extract_json_from_text,
+    resolve_prompt_path,
+    normalize_output_granularity,
+)
 
 api = Blueprint('api', __name__)
 
@@ -64,14 +70,17 @@ def parse_template_fields(template):
     return list(set(fields))  # 去重
 
 
-def load_prompt_template(field_name):
-    """加载提示词模板"""
-    prompt_file = os.path.join('prompts', f'{field_name}.txt')
-    if not os.path.exists(prompt_file):
-        raise FileNotFoundError(f'提示词模板文件 {prompt_file} 不存在')
-
-    with open(prompt_file, 'r', encoding='utf-8') as f:
+def load_prompt_template(field_name, data=None):
+    data = data or {}
+    granularity = data.get("output_granularity")
+    path = resolve_prompt_path(field_name, granularity=granularity)
+    with open(path, "r", encoding="utf-8") as f:
         return f.read()
+
+
+def build_prompt(field_name, data):
+    mode = data.get("mode") or ""
+    return compose_prompt(field_name, data, mode=mode)
 
 
 def _looks_like_openai_compatible_host(host):
@@ -96,6 +105,28 @@ def _clean_model_content(content):
     content = content or ""
     content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL)
     return content.strip()
+
+
+def _extract_json_from_model_output(text):
+    text = (text or "").strip()
+
+    # 去掉代码块包裹
+    text = re.sub(r"^```json\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"^```\s*", "", text)
+    text = re.sub(r"\s*```$", "", text)
+
+    # 先直接解析
+    try:
+        return json.loads(text)
+    except Exception:
+        pass
+
+    # 再尝试从正文中提取 JSON 数组或对象
+    match = re.search(r"(\[[\s\S]*\]|\{[\s\S]*\})", text)
+    if not match:
+        raise ValueError("模型返回中未找到有效 JSON 内容")
+
+    return json.loads(match.group(1))
 
 
 def _build_http_session():
@@ -1416,6 +1447,32 @@ def get_chat_task(task_id):
     payload = _task_payload_view(task)
     payload['success'] = True
     return jsonify(payload)
+
+
+@api.route('/chat/project/<int:project_id>/artifacts', methods=['GET'])
+@login_required
+def get_project_artifacts(project_id):
+    script = ScriptModel.query.get_or_404(project_id)
+    if script.user_id != current_user.id:
+        return jsonify({'success': False, 'message': '您没有权限访问该项目'}), 403
+
+    result = _get_project_result(project_id)
+    if not result:
+        result = {
+            'final_script': script.content or '',
+            'character_bible': script.characters or '',
+            'plot_outline': script.outline or '',
+            'review_report': script.knowledge or '',
+        }
+
+    return jsonify({
+        'success': True,
+        'project_id': project_id,
+        'final_script': result.get('final_script', ''),
+        'character_bible': result.get('character_bible', ''),
+        'plot_outline': result.get('plot_outline', ''),
+        'review_report': result.get('review_report', ''),
+    })
 
 
 @api.route('/chat/project/<int:project_id>/trace', methods=['GET'])

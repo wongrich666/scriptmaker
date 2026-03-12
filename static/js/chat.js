@@ -453,9 +453,14 @@ function startPollingTask(taskId) {
       updateProgressCardFromTask(data);
 
       if (currentProjectId) {
-        await refreshProjectPanels(currentProjectId);
-        enableLegacyLinks(currentProjectId);
-      }
+          try {
+            await refreshProjectPanels(currentProjectId);
+            enableLegacyLinks(currentProjectId);
+          } catch (panelErr) {
+            console.warn("项目面板刷新失败：", panelErr);
+            addMessage("system", `结果区刷新失败：${panelErr.message}`);
+          }
+        }
 
       updateSlowTip(data);
 

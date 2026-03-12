@@ -1,0 +1,204 @@
+import os
+import json
+import re
+from typing import Any, Dict, Optional
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PROMPTS_DIR = os.path.join(BASE_DIR, "prompts")
+
+PROMPT_MANIFEST = {
+    "input_normalizer": "core/input_normalizer.txt",
+    "content_check": "core/source_asset_extract.txt",
+    "source_asset_extract": "core/source_asset_extract.txt",
+    "characters": "core/character_bible_json.txt",
+    "character_bible": "core/character_bible_json.txt",
+    "outline": {
+        "outline": "core/story_outline.txt",
+        "episode_plan": "core/episode_plan.txt",
+    },
+    "review_report": "core/review_report.txt",
+    "final_rewrite": "core/final_rewrite.txt",
+    "chapter_script": "core/single_episode_script.txt",
+    "single_episode_script": "core/single_episode_script.txt",
+    "scene_asset_extract": "core/scene_asset_extract.txt",
+}
+
+LEGACY_FALLBACK = {
+    "characters": "characters.txt",
+    "outline": "outline.txt",
+    "chapter_script": "chapter_script.txt",
+    "content_check": "content_check.txt",
+}
+
+MODE_MANIFEST = {
+    "reskin_longform": "modes/reskin_longform.txt",
+    "short_drama_cn": "modes/short_drama_cn.txt",
+    "novel_serial": "modes/novel_serial.txt",
+    "": None,
+    None: None,
+}
+
+ALIASES = {
+    "character": "characters",
+    "character_bible_json": "characters",
+    "story_outline": "outline",
+    "episode_plan": "outline",
+    "review": "review_report",
+    "final": "final_rewrite",
+    "single_episode": "chapter_script",
+}
+
+
+def normalize_output_granularity(value: Optional[str]) -> str:
+    value = (value or "").strip().lower()
+    mapping = {
+        "outline": "outline",
+        "story_outline": "outline",
+        "episode_plan": "episode_plan",
+        "episode": "episode_plan",
+        "episodes": "episode_plan",
+        "series": "episode_plan",
+        "single_episode_script": "single_episode_script",
+        "single_episode": "single_episode_script",
+        "scene_asset_extract": "scene_asset_extract",
+    }
+    return mapping.get(value, "outline")
+
+
+def normalize_mode(value: Optional[str]) -> str:
+    value = (value or "").strip().lower()
+    if value in MODE_MANIFEST:
+        return value
+    return ""
+
+
+def _safe_json_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False, indent=2)
+    return str(value)
+
+
+def resolve_prompt_path(task_name: str, granularity: Optional[str] = None) -> str:
+    task_name = ALIASES.get(task_name, task_name)
+    conf = PROMPT_MANIFEST.get(task_name)
+
+    if conf is None:
+        raise ValueError(f"未注册的 prompt task: {task_name}")
+
+    if isinstance(conf, dict):
+        granularity = normalize_output_granularity(granularity)
+        rel_path = conf.get(granularity) or conf.get("outline")
+    else:
+        rel_path = conf
+
+    full_path = os.path.join(PROMPTS_DIR, rel_path)
+    if os.path.exists(full_path):
+        return full_path
+
+    fallback = LEGACY_FALLBACK.get(task_name)
+    if fallback:
+        legacy_path = os.path.join(PROMPTS_DIR, fallback)
+        if os.path.exists(legacy_path):
+            return legacy_path
+
+    raise FileNotFoundError(f"找不到 prompt 文件: {full_path}")
+
+
+def load_prompt_text(task_name: str, granularity: Optional[str] = None) -> str:
+    path = resolve_prompt_path(task_name, granularity=granularity)
+    with open(path, "r", encoding="utf-8") as f:
+        return f.read().strip()
+
+
+def load_mode_profile(mode: Optional[str]) -> str:
+    mode = normalize_mode(mode)
+    rel_path = MODE_MANIFEST.get(mode)
+    if not rel_path:
+        return ""
+
+    full_path = os.path.join(PROMPTS_DIR, rel_path)
+    if not os.path.exists(full_path):
+        return ""
+
+    with open(full_path, "r", encoding="utf-8") as f:
+        return f.read().strip()
+
+
+def build_structured_input_block(data: Dict[str, Any]) -> str:
+    field_labels = [
+        ("title", "标题"),
+        ("title_hint", "标题方向"),
+        ("genre", "题材"),
+        ("subgenre", "细分题材"),
+        ("tone", "风格气质"),
+        ("style", "写作风格"),
+        ("format", "作品形态"),
+        ("target_length", "目标篇幅"),
+        ("word_count", "字数"),
+        ("character_count", "角色数量"),
+        ("episode_count", "集数"),
+        ("output_granularity", "输出粒度"),
+        ("additional_requirements", "用户原始需求"),
+        ("framework_text", "框架内容"),
+        ("reference_text", "参考内容"),
+        ("banned_items", "禁止项"),
+        ("must_keep", "必须保留"),
+        ("core_conflict", "主冲突"),
+        ("protagonist_core", "主角核心"),
+        ("antagonist_core", "对手核心"),
+        ("source_text", "源文本"),
+        ("background", "背景设定"),
+        ("knowledge", "知识库"),
+        ("history", "已有内容/人物设定"),
+        ("content", "正文/大纲内容"),
+        ("review_report", "审核报告"),
+        ("uncertainty_notes", "不确定项"),
+        ("previous_state", "上一集状态"),
+        ("current_episode_plan", "当前集计划"),
+    ]
+
+    lines = ["# Structured Input"]
+    for key, label in field_labels:
+        value = data.get(key)
+        if value in (None, "", [], {}):
+            continue
+        lines.append(f"【{label}】")
+        lines.append(_safe_json_text(value))
+        lines.append("")
+
+    return "\n".join(lines).strip()
+
+
+def compose_prompt(task_name: str, data: Dict[str, Any], mode: Optional[str] = None) -> str:
+    granularity = data.get("output_granularity")
+    core_prompt = load_prompt_text(task_name, granularity=granularity)
+    mode_profile = load_mode_profile(mode or data.get("mode"))
+    input_block = build_structured_input_block(data)
+
+    parts = [core_prompt]
+    if mode_profile:
+        parts.append("\n\n# Mode Profile\n" + mode_profile)
+    parts.append("\n\n" + input_block)
+
+    return "".join(parts).strip()
+
+
+def extract_json_from_text(text: str) -> Any:
+    text = (text or "").strip()
+
+    text = re.sub(r"^```json\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"^```\s*", "", text)
+    text = re.sub(r"\s*```$", "", text)
+
+    try:
+        return json.loads(text)
+    except Exception:
+        pass
+
+    match = re.search(r"(\[[\s\S]*\]|\{[\s\S]*\})", text)
+    if not match:
+        raise ValueError("模型输出中未找到可解析 JSON")
+
+    return json.loads(match.group(1))

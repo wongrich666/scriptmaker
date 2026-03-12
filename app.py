@@ -1,6 +1,8 @@
 """
 github地址  https://github.com/wongrich666/scriptmaker.git
 ctrl K提交，ctrl shift K上传
+网页运行中打开 http://192.168.1.39:60002/api/chat/task/任务id 可以查看运行的怎么样了
+打开 http://192.168.1.39:60002/api/chat/project/36或者其他数字/artifacts 查看是否有四个内容
 """
 
 """
