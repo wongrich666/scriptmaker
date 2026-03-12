@@ -38,6 +38,12 @@ const STAGE_ORDER_MAP = {
     { stage: "plot_outline", label: "场景识别" },
     { stage: "final_script", label: "场景资产" }
   ]
+  multi_episode_script: [
+    { stage: "queued", label: "已创建任务" },
+    { stage: "character_bible", label: "角色基础" },
+    { stage: "plot_outline", label: "分集计划" },
+    { stage: "final_script", label: "多集剧本" }
+  ],
 };
 
 const sendBtn = document.getElementById("sendBtn");
@@ -82,6 +88,21 @@ const referenceInput = document.getElementById("referenceInput");
 const frameworkInput = document.getElementById("frameworkInput");
 const bannedInput = document.getElementById("bannedInput");
 const currentEpisodeInput = document.getElementById("currentEpisodeInput");
+const episodeCounterText = document.getElementById("episodeCounterText");
+
+function updateEpisodeCounter(task) {
+  if (!episodeCounterText) return;
+
+  const total = Number(task.episode_count || 0);
+  const done = Number(task.generated_episode_count || 0);
+
+  if (getCurrentGranularity() !== "multi_episode_script" || !total) {
+    episodeCounterText.textContent = "";
+    return;
+  }
+
+  episodeCounterText.textContent = `当前已生成 ${done} 集，共 ${total} 集`;
+}
 
 function getCurrentGranularity() {
   return granularitySelect ? granularitySelect.value : "outline";
@@ -98,8 +119,8 @@ function getFinalTabLabel(granularity) {
       return "最终总纲";
     case "episode_plan":
       return "最终分集稿";
-    case "single_episode_script":
-      return "单集剧本";
+    case "multi_episode_script":
+      return "多集剧本";
     case "scene_asset_extract":
       return "场景资产";
     default:
@@ -210,6 +231,7 @@ function setIdleProgressCard() {
   if (progressPercentText) progressPercentText.textContent = "0%";
   if (progressBarFill) progressBarFill.style.width = "0%";
   if (slowTipText) slowTipText.textContent = "";
+  if (episodeCounterText) episodeCounterText.textContent = "";
   renderProgressSteps("", "idle");
 }
 
@@ -249,6 +271,7 @@ function updateProgressCardFromTask(task) {
   if (progressPercentText) progressPercentText.textContent = `${Math.round(progress)}%`;
   if (progressBarFill) progressBarFill.style.width = `${progress}%`;
   renderProgressSteps(task.current_stage, task.status);
+  updateEpisodeCounter(task);
 }
 
 function updateSlowTip(task) {
@@ -529,7 +552,6 @@ async function handleSend() {
         framework_text: frameworkText,
         banned: banned,
         banned_items: banned,
-        current_episode_no: currentEpisodeNo,
         current_episode: currentEpisodeNo
       }
     };

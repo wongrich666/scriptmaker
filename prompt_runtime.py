@@ -13,10 +13,11 @@ PROMPT_MANIFEST = {
     "characters": "core/character_bible_json.txt",
     "character_bible": "core/character_bible_json.txt",
     "outline": {
-        "outline": "core/story_outline.txt",
-        "episode_plan": "core/episode_plan.txt",
-        "single_episode_script": "core/single_episode_script.txt",
-        "scene_asset_extract": "core/scene_asset_extract.txt",
+    "outline": "core/story_outline.txt",
+    "episode_plan": "core/episode_plan.txt",
+    "single_episode_script": "core/single_episode_script.txt",
+    "multi_episode_script": "core/episode_plan.txt",
+    "scene_asset_extract": "core/scene_asset_extract.txt",
     },
     "review_report": "core/review_report.txt",
     "final_rewrite": "core/final_rewrite.txt",
@@ -62,6 +63,9 @@ def normalize_output_granularity(value: Optional[str]) -> str:
         "series": "episode_plan",
         "single_episode_script": "single_episode_script",
         "single_episode": "single_episode_script",
+        "multi_episode_script": "multi_episode_script",
+        "multi_episode": "multi_episode_script",
+        "batch_episode_script": "multi_episode_script",
         "scene_asset_extract": "scene_asset_extract",
     }
     return mapping.get(value, "outline")
@@ -141,6 +145,9 @@ def build_structured_input_block(data: Dict[str, Any]) -> str:
         ("word_count", "字数"),
         ("character_count", "角色数量"),
         ("episode_count", "集数"),
+        ("current_episode_no", "当前集数"),
+        ("generated_episode_count", "已生成集数"),
+        ("episode_target_words", "单集目标字数"),
         ("output_granularity", "输出粒度"),
         ("additional_requirements", "用户原始需求"),
         ("framework_text", "框架内容"),
@@ -159,6 +166,9 @@ def build_structured_input_block(data: Dict[str, Any]) -> str:
         ("uncertainty_notes", "不确定项"),
         ("previous_state", "上一集状态"),
         ("current_episode_plan", "当前集计划"),
+        ("episode_target_words", "单集目标字数"),
+        ("current_episode_no", "当前生成集数"),
+        ("generated_episode_count", "已生成集数"),
     ]
 
     lines = ["# Structured Input"]

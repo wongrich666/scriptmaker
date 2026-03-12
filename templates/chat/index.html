@@ -81,16 +81,11 @@
             </div>
 
             <div class="field-column">
-              <label for="currentEpisodeInput">当前集</label>
-              <input id="currentEpisodeInput" type="number" min="1" step="1" value="1">
-            </div>
-
-            <div class="field-column">
               <label for="granularitySelect">输出粒度</label>
               <select id="granularitySelect">
                 <option value="outline">outline（总纲）</option>
                 <option value="episode_plan">episode_plan（分集计划）</option>
-                <option value="single_episode_script">single_episode_script（单集正文）</option>
+                <option value="multi_episode_script">multi_episode_script（多集连出）</option>
                 <option value="scene_asset_extract">scene_asset_extract（场景资产）</option>
               </select>
             </div>
@@ -151,6 +146,8 @@
           </div>
           <div class="progress-percent" id="progressPercentText">0%</div>
         </div>
+
+        <div id="episodeCounterText" class="episode-counter"></div>
 
         <div class="progress-bar">
           <div class="progress-bar-fill" id="progressBarFill" style="width: 0%;"></div>

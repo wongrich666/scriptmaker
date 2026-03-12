@@ -924,19 +924,16 @@ def _task_payload_view(task: dict) -> dict:
     else:
         ui = _get_stage_ui(stage, status="running")
 
-    return {
-        "task_id": task.get("task_id"),
-        "project_id": task.get("project_id"),
-        "status": status,
-        "current_stage": stage,
-        "current_title": task.get("current_title") or ui["title"],
-        "current_message": task.get("current_message") or ui["message"],
-        "progress": task.get("progress", ui["progress"]),
-        "error": task.get("error", ""),
-        "selected_model": task.get("selected_model"),
-        "created_at": task.get("created_at"),
-        "updated_at": task.get("updated_at"),
-    }
+    payload = {"task_id": task.get("task_id"), "project_id": task.get("project_id"), "status": status,
+               "current_stage": stage, "current_title": task.get("current_title") or ui["title"],
+               "current_message": task.get("current_message") or ui["message"],
+               "progress": task.get("progress", ui["progress"]), "error": task.get("error", ""),
+               "selected_model": task.get("selected_model"), "created_at": task.get("created_at"),
+               "updated_at": task.get("updated_at"), "episode_count": int(task.get("episode_count") or 0),
+               "generated_episode_count": int(task.get("generated_episode_count") or 0),
+               "current_episode_no": int(task.get("current_episode_no") or 0)}
+
+    return payload
 
 
 def _utc_now_iso():
@@ -1816,14 +1813,23 @@ def _resolve_episode_count(meta, episode_plan_text):
     return 20
 
 
-def _build_episode_script_prompt(user_message, word_count_wan, character_bible, current_episode_plan, episode_no, meta):
+def _build_episode_script_prompt(
+    user_message,
+    word_count_wan,
+    character_bible,
+    current_episode_plan,
+    episode_no,
+    meta,
+):
     data = _build_chat_prompt_data(
         user_message,
         word_count_wan,
         meta,
         history=character_bible,
         current_episode_plan=current_episode_plan,
-        episode_no=episode_no,
+        current_episode_no=episode_no,
+        generated_episode_count=meta.get("generated_episode_count"),
+        episode_target_words=meta.get("episode_target_words"),
         source_text=user_message,
     )
     return compose_prompt("single_episode_script", data, mode=meta.get("mode"))
@@ -1846,6 +1852,157 @@ def _extract_episode_plan_slice(full_plan_text, episode_no):
         return full_plan_text[start:].strip()
 
     return full_plan_text[start:end].strip()
+
+
+def _run_multi_episode_script_generation(
+    task_id,
+    project_id,
+    user_message,
+    word_count_wan,
+    character_bible,
+    full_episode_plan_text,
+    meta,
+    selected_model,
+):
+    total = _resolve_episode_count(meta, full_episode_plan_text)
+
+    try:
+        total_words = max(1000, int(float(word_count_wan) * 10000))
+    except Exception:
+        total_words = 20000
+
+    episode_target_words = max(700, round(total_words / max(total, 1)))
+    episode_texts = []
+
+    for ep in range(1, total + 1):
+        current_episode_plan = _extract_episode_plan_slice(full_episode_plan_text, ep)
+
+        ep_meta = dict(meta or {})
+        ep_meta["output_granularity"] = "single_episode_script"
+        ep_meta["current_episode_no"] = ep
+        ep_meta["generated_episode_count"] = len(episode_texts)
+        ep_meta["episode_count"] = total
+        ep_meta["episode_target_words"] = episode_target_words
+
+        _update_task_record(
+            task_id,
+            status="running",
+            current_stage="final_script",
+            current_title=f"正在生成第 {ep} 集 / 共 {total} 集",
+            current_message=f"当前已生成 {len(episode_texts)} 集，共 {total} 集",
+            progress=55 + int(40 * (len(episode_texts) / max(total, 1))),
+            current_episode_no=ep,
+            generated_episode_count=len(episode_texts),
+            episode_count=total,
+        )
+
+        prompt = _build_episode_script_prompt(
+            user_message=user_message,
+            word_count_wan=word_count_wan,
+            character_bible=character_bible,
+            current_episode_plan=current_episode_plan,
+            episode_no=ep,
+            meta=ep_meta,
+        )
+
+        episode_text = _call_api_for_chat(
+            prompt,
+            selected_model=selected_model,
+        )
+
+        episode_texts.append(episode_text)
+
+        save_path = _save_episode_to_local(project_id, ep, episode_text)
+
+        combined_text = _merge_episode_scripts(episode_texts)
+
+        _save_partial_artifacts(
+            project_id,
+            user_message=user_message,
+            final_script=combined_text,
+            character_bible=character_bible,
+            plot_outline=full_episode_plan_text,
+            review_report="",
+        )
+
+        _append_trace(
+            project_id,
+            "final_script",
+            f"第 {ep} 集已生成完成，并已自动保存：{os.path.basename(save_path)}",
+            status="done",
+            preview=_safe_preview(episode_text, 180),
+        )
+
+        _update_task_record(
+            task_id,
+            status="running",
+            current_stage="final_script",
+            current_title=f"第 {ep} 集已完成",
+            current_message=f"当前已生成 {ep} 集，共 {total} 集",
+            progress=55 + int(40 * (ep / max(total, 1))),
+            current_episode_no=ep,
+            generated_episode_count=ep,
+            episode_count=total,
+        )
+
+    final_script = _merge_episode_scripts(episode_texts)
+
+    _save_project_artifacts(
+        project_id,
+        user_message=user_message,
+        final_script=final_script,
+        character_bible=character_bible,
+        plot_outline=full_episode_plan_text,
+        review_report="",
+    )
+
+    final_combined_path = os.path.join(
+        _get_episode_output_dir(project_id),
+        "All-Episodes.txt",
+    )
+    with open(final_combined_path, "w", encoding="utf-8") as f:
+        f.write(final_script)
+
+    _append_trace(
+        project_id,
+        "done",
+        f"多集剧本已完成，合并文件已保存：{os.path.basename(final_combined_path)}",
+        status="done",
+    )
+
+    _update_task_record(
+        task_id,
+        status="done",
+        current_stage="done",
+        current_title="多集剧本已完成",
+        current_message=f"已连续生成完成，共 {total} 集",
+        progress=100,
+        current_episode_no=total,
+        generated_episode_count=total,
+        episode_count=total,
+    )
+
+    return final_script
+
+
+def _calc_episode_target_words(meta):
+    total_words = max(1000, int(float(meta.get("word_count_wan", 2.0)) * 10000))
+    episode_count = max(1, int(meta.get("episode_count", 10)))
+    return max(700, round(total_words / episode_count))
+
+
+def _get_episode_output_dir(project_id):
+    base_dir = os.path.join(current_app.instance_path, "chat_episode_exports", f"project_{project_id}")
+    os.makedirs(base_dir, exist_ok=True)
+    return base_dir
+
+
+def _save_episode_to_local(project_id, episode_no, episode_text):
+    output_dir = _get_episode_output_dir(project_id)
+    file_path = os.path.join(output_dir, f"Episode-{episode_no:02d}.txt")
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(episode_text or "")
+    return file_path
 
 
 @api.route('/model/current', methods=['GET'])
