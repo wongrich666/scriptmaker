@@ -1,4 +1,6 @@
 const DEFAULT_WORD_COUNT_WAN = 2;
+const DEFAULT_EPISODE_COUNT = 10;
+const DEFAULT_CURRENT_EPISODE = 1;
 const POLL_INTERVAL = 2000;
 const SLOW_HINT_AFTER_MS = 18000;
 const VERY_SLOW_HINT_AFTER_MS = 32000;
@@ -16,14 +18,14 @@ const STAGE_ORDER_MAP = {
     { stage: "character_bible", label: "人物设定" },
     { stage: "plot_outline", label: "剧情大纲" },
     { stage: "review_report", label: "审核意见" },
-    { stage: "final_script", label: "最终稿" }
+    { stage: "final_script", label: "最终总纲" }
   ],
   episode_plan: [
     { stage: "queued", label: "已创建任务" },
     { stage: "character_bible", label: "人物设定" },
     { stage: "plot_outline", label: "分集计划" },
     { stage: "review_report", label: "审核意见" },
-    { stage: "final_script", label: "最终稿" }
+    { stage: "final_script", label: "最终分集稿" }
   ],
   single_episode_script: [
     { stage: "queued", label: "已创建任务" },
@@ -34,14 +36,9 @@ const STAGE_ORDER_MAP = {
   scene_asset_extract: [
     { stage: "queued", label: "已创建任务" },
     { stage: "plot_outline", label: "场景识别" },
-    { stage: "final_script", label: "场景资产输出" }
+    { stage: "final_script", label: "场景资产" }
   ]
 };
-
-function getStageOrder() {
-  const value = granularitySelect ? granularitySelect.value : "outline";
-  return STAGE_ORDER_MAP[value] || STAGE_ORDER_MAP.outline;
-}
 
 const sendBtn = document.getElementById("sendBtn");
 const newChatBtn = document.getElementById("newChatBtn");
@@ -84,28 +81,52 @@ const modeSelect = document.getElementById("modeSelect");
 const referenceInput = document.getElementById("referenceInput");
 const frameworkInput = document.getElementById("frameworkInput");
 const bannedInput = document.getElementById("bannedInput");
+const currentEpisodeInput = document.getElementById("currentEpisodeInput");
 
-
-document.querySelectorAll(".tab-btn").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
-    document.querySelectorAll(".tab-content").forEach((c) => c.classList.remove("active"));
-    btn.classList.add("active");
-    const target = document.getElementById(`tab-${btn.dataset.tab}`);
-    if (target) target.classList.add("active");
-  });
-});
-
-if (newChatBtn) {
-  newChatBtn.addEventListener("click", resetChatState);
+function getCurrentGranularity() {
+  return granularitySelect ? granularitySelect.value : "outline";
 }
-if (sendBtn) {
-  sendBtn.addEventListener("click", handleSend);
+
+function getStageOrder() {
+  const value = getCurrentGranularity();
+  return STAGE_ORDER_MAP[value] || STAGE_ORDER_MAP.outline;
 }
-if (modelSelect) {
-  modelSelect.addEventListener("change", () => {
-    updateModel(modelSelect.value);
-  });
+
+function getFinalTabLabel(granularity) {
+  switch (granularity) {
+    case "outline":
+      return "最终总纲";
+    case "episode_plan":
+      return "最终分集稿";
+    case "single_episode_script":
+      return "单集剧本";
+    case "scene_asset_extract":
+      return "场景资产";
+    default:
+      return "最终稿";
+  }
+}
+
+function getFinalPlaceholder(granularity) {
+  switch (granularity) {
+    case "outline":
+      return "暂无最终总纲";
+    case "episode_plan":
+      return "暂无最终分集稿";
+    case "single_episode_script":
+      return "暂无单集剧本";
+    case "scene_asset_extract":
+      return "暂无场景资产";
+    default:
+      return "暂无最终稿";
+  }
+}
+
+function updateFinalTabLabel() {
+  const finalTabBtn = document.querySelector('.tab-btn[data-tab="final"]');
+  if (finalTabBtn) {
+    finalTabBtn.textContent = getFinalTabLabel(getCurrentGranularity());
+  }
 }
 
 function escapeHtml(text) {
@@ -178,7 +199,14 @@ function enableLegacyLinks(projectId) {
 function setIdleProgressCard() {
   if (stagePillText) stagePillText.textContent = "空闲";
   if (stageTitleText) stageTitleText.textContent = "等待开始";
-  if (stageHintText) stageHintText.textContent = "输入需求后，系统会先搭建人物，再整理剧情，最后输出最终稿。";
+
+  const granularity = getCurrentGranularity();
+  const finalLabel = getFinalTabLabel(granularity);
+
+  if (stageHintText) {
+    stageHintText.textContent = `输入需求后，系统会先搭建人物，再整理剧情，最后输出${finalLabel}。`;
+  }
+
   if (progressPercentText) progressPercentText.textContent = "0%";
   if (progressBarFill) progressBarFill.style.width = "0%";
   if (slowTipText) slowTipText.textContent = "";
@@ -311,18 +339,44 @@ function syncNewTraceMessages(trace) {
 }
 
 function renderArtifacts(data) {
-  if (finalScriptBox) finalScriptBox.textContent = data.final_script || "暂无最终剧本";
-  if (characterBox) characterBox.textContent = data.character_bible || "暂无人物设定";
-  if (outlineBox) outlineBox.textContent = data.plot_outline || "暂无剧情大纲";
-  if (reviewBox) reviewBox.textContent = data.review_report || "暂无审核意见";
+  const granularity = getCurrentGranularity();
+
+  const finalText =
+    data.final_script ||
+    data.final_artifact ||
+    data.final_output ||
+    "";
+
+  const characterText =
+    data.character_bible ||
+    data.character_profile ||
+    "";
+
+  const outlineText =
+    data.plot_outline ||
+    data.episode_plan ||
+    data.outline ||
+    "";
+
+  const reviewText =
+    data.review_report ||
+    data.review ||
+    "";
+
+  if (finalScriptBox) finalScriptBox.textContent = finalText || getFinalPlaceholder(granularity);
+  if (characterBox) characterBox.textContent = characterText || "暂无人物设定";
+  if (outlineBox) outlineBox.textContent = outlineText || "暂无剧情大纲";
+  if (reviewBox) reviewBox.textContent = reviewText || "暂无审核意见";
 }
 
 async function safeReadJson(resp) {
   const text = await resp.text();
   const contentType = resp.headers.get("content-type") || "";
+
   if (!contentType.includes("application/json")) {
     throw new Error(`接口没有返回 JSON。HTTP ${resp.status}，前 200 字符：${text.slice(0, 200)}`);
   }
+
   try {
     return JSON.parse(text);
   } catch (e) {
@@ -380,12 +434,31 @@ function resetChatState() {
   if (timelineCountText) timelineCountText.textContent = "0 条更新";
 
   disableLegacyLinks();
+  updateFinalTabLabel();
   setIdleProgressCard();
 
   if (pollingTimer) {
     clearInterval(pollingTimer);
     pollingTimer = null;
   }
+}
+
+function normalizePositiveFloat(inputEl, fallbackValue) {
+  let value = inputEl ? parseFloat(inputEl.value) : fallbackValue;
+  if (Number.isNaN(value) || value <= 0) {
+    value = fallbackValue;
+    if (inputEl) inputEl.value = fallbackValue;
+  }
+  return value;
+}
+
+function normalizePositiveInt(inputEl, fallbackValue) {
+  let value = inputEl ? parseInt(inputEl.value, 10) : fallbackValue;
+  if (Number.isNaN(value) || value <= 0) {
+    value = fallbackValue;
+    if (inputEl) inputEl.value = fallbackValue;
+  }
+  return value;
 }
 
 async function handleSend() {
@@ -395,17 +468,6 @@ async function handleSend() {
     return;
   }
 
-  let wordCountWan = wordCountInput ? parseFloat(wordCountInput.value) : DEFAULT_WORD_COUNT_WAN;
-  if (Number.isNaN(wordCountWan) || wordCountWan <= 0) {
-    wordCountWan = DEFAULT_WORD_COUNT_WAN;
-    if (wordCountInput) wordCountInput.value = DEFAULT_WORD_COUNT_WAN;
-  }
-
-  let episodeCount = episodeCountInput ? parseInt(episodeCountInput.value, 10) : 10;
-    if (Number.isNaN(episodeCount) || episodeCount <= 0) {
-      episodeCount = 10;
-      if (episodeCountInput) episodeCountInput.value = 10;
-    }
   if (sendBtn) sendBtn.disabled = true;
 
   lastTraceCount = 0;
@@ -420,29 +482,40 @@ async function handleSend() {
   if (timelineList) timelineList.innerHTML = `<div class="timeline-empty">正在创建任务...</div>`;
   if (timelineCountText) timelineCountText.textContent = "0 条更新";
 
-  const genre = genreInput ? genreInput.value.trim() : "";
-  const style = styleInput ? styleInput.value.trim() : "";
-  const outputGranularity = granularitySelect ? granularitySelect.value : "outline";
-  const mode = modeSelect ? modeSelect.value : "";
-  const referenceText = referenceInput ? referenceInput.value.trim() : "";
-  const frameworkText = frameworkInput ? frameworkInput.value.trim() : "";
-  const banned = bannedInput ? bannedInput.value.trim() : "";
+  try {
+    const wordCountWan = normalizePositiveFloat(wordCountInput, DEFAULT_WORD_COUNT_WAN);
+    const episodeCount = normalizePositiveInt(episodeCountInput, DEFAULT_EPISODE_COUNT);
+    const currentEpisodeNo = normalizePositiveInt(currentEpisodeInput, DEFAULT_CURRENT_EPISODE);
 
-  const summaryLines = [`〖字数〗${wordCountWan}万字`];
-  if (episodeCount) summaryLines.push(`〖集数〗${episodeCount}`);
-  if (genre) summaryLines.push(`〖题材〗${genre}`);
-  if (style) summaryLines.push(`〖风格〗${style}`);
-  if (outputGranularity) summaryLines.push(`〖输出粒度〗${outputGranularity}`);
-  if (mode) summaryLines.push(`〖模式〗${mode}`);
-  if (frameworkText) summaryLines.push(`〖框架〗${frameworkText}`);
-  if (referenceText) summaryLines.push(`〖参考〗${referenceText}`);
-  if (banned) summaryLines.push(`〖禁止项〗${banned}`);
-  summaryLines.push(`〖需求〗${message}`);
+    const genre = genreInput ? genreInput.value.trim() : "";
+    const style = styleInput ? styleInput.value.trim() : "";
+    const outputGranularity = getCurrentGranularity();
+    const mode = modeSelect ? modeSelect.value : "";
+    const referenceText = referenceInput ? referenceInput.value.trim() : "";
+    const frameworkText = frameworkInput ? frameworkInput.value.trim() : "";
+    const banned = bannedInput ? bannedInput.value.trim() : "";
 
-  addMessage("user", summaryLines.join("\n"));
-  addMessage("system", "已收到你的需求，我会先搭人物，再搭剧情，再做审核和整合。");
+    updateFinalTabLabel();
+    setIdleProgressCard();
 
-  const payload = {
+    const summaryLines = [`〖字数〗${wordCountWan}万字`];
+    if (episodeCount) summaryLines.push(`〖集数〗${episodeCount}`);
+    if (outputGranularity === "single_episode_script") {
+      summaryLines.push(`〖当前集〗第${currentEpisodeNo}集`);
+    }
+    if (genre) summaryLines.push(`〖题材〗${genre}`);
+    if (style) summaryLines.push(`〖风格〗${style}`);
+    if (outputGranularity) summaryLines.push(`〖输出粒度〗${outputGranularity}`);
+    if (mode) summaryLines.push(`〖模式〗${mode}`);
+    if (frameworkText) summaryLines.push(`〖框架〗${frameworkText}`);
+    if (referenceText) summaryLines.push(`〖参考〗${referenceText}`);
+    if (banned) summaryLines.push(`〖禁止项〗${banned}`);
+    summaryLines.push(`〖需求〗${message}`);
+
+    addMessage("user", summaryLines.join("\n"));
+    addMessage("system", "已收到你的需求，我会先搭人物，再搭剧情，再做审核和整合。");
+
+    const payload = {
       project_id: currentProjectId,
       message: message,
       meta: {
@@ -455,11 +528,12 @@ async function handleSend() {
         reference_text: referenceText,
         framework_text: frameworkText,
         banned: banned,
+        banned_items: banned,
         current_episode_no: currentEpisodeNo,
+        current_episode: currentEpisodeNo
       }
     };
 
-  try {
     const resp = await fetch(window.chatConfig.sendUrl, {
       method: "POST",
       headers: {
@@ -483,6 +557,7 @@ async function handleSend() {
     updateProgressCardFromTask(data);
     startPollingTask(currentTaskId);
   } catch (err) {
+    console.error("发送失败：", err);
     addMessage("system", `发送失败：${err.message}`);
     if (sendBtn) sendBtn.disabled = false;
   }
@@ -515,6 +590,7 @@ function startPollingTask(taskId) {
         currentProjectId = data.project_id;
         if (projectIdText) projectIdText.textContent = currentProjectId;
       }
+
       if (data.task_id && taskIdText) {
         taskIdText.textContent = data.task_id;
       }
@@ -522,14 +598,14 @@ function startPollingTask(taskId) {
       updateProgressCardFromTask(data);
 
       if (currentProjectId) {
-          try {
-            await refreshProjectPanels(currentProjectId);
-            enableLegacyLinks(currentProjectId);
-          } catch (panelErr) {
-            console.warn("项目面板刷新失败：", panelErr);
-            addMessage("system", `结果区刷新失败：${panelErr.message}`);
-          }
+        try {
+          await refreshProjectPanels(currentProjectId);
+          enableLegacyLinks(currentProjectId);
+        } catch (panelErr) {
+          console.warn("项目面板刷新失败：", panelErr);
+          addMessage("system", `结果区刷新失败：${panelErr.message}`);
         }
+      }
 
       updateSlowTip(data);
 
@@ -549,6 +625,7 @@ function startPollingTask(taskId) {
     } catch (err) {
       stopPolling();
       if (sendBtn) sendBtn.disabled = false;
+      console.error("轮询失败：", err);
       addMessage("system", `轮询失败：${err.message}`);
     }
   };
@@ -639,8 +716,40 @@ function initSplitters() {
   applyLayout();
 }
 
+document.querySelectorAll(".tab-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+    document.querySelectorAll(".tab-content").forEach((c) => c.classList.remove("active"));
+    btn.classList.add("active");
+    const target = document.getElementById(`tab-${btn.dataset.tab}`);
+    if (target) target.classList.add("active");
+  });
+});
+
+if (newChatBtn) {
+  newChatBtn.addEventListener("click", resetChatState);
+}
+
+if (sendBtn) {
+  sendBtn.addEventListener("click", handleSend);
+}
+
+if (modelSelect) {
+  modelSelect.addEventListener("change", () => {
+    updateModel(modelSelect.value);
+  });
+}
+
+if (granularitySelect) {
+  granularitySelect.addEventListener("change", () => {
+    updateFinalTabLabel();
+    setIdleProgressCard();
+  });
+}
+
 window.addEventListener("DOMContentLoaded", () => {
   disableLegacyLinks();
+  updateFinalTabLabel();
   setIdleProgressCard();
   loadCurrentModel();
   initSplitters();
