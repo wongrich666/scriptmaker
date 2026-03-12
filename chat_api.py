@@ -1196,135 +1196,57 @@ def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, 
             # ============================================================
             # 分支 A：单集剧本
             # ============================================================
-            if granularity == "single_episode_script":
-                # 1) 人物基础
-                stage_being_processed = "character_bible"
-                _update_task_stage(
-                    task_id,
-                    "character_bible",
-                    status="running",
-                    message="我先补齐本集所需的角色基础。",
-                )
-                _append_trace(
-                    project_id,
-                    "character_bible",
-                    "我先补齐本集所需的角色基础。",
-                    status="running",
-                )
-
+            if granularity == "episode_plan":
+                # 1) 人物设定
                 character_bible = _call_api_for_chat(
                     _build_character_prompt(user_message, word_count_wan, meta),
                     selected_model=selected_model,
                 )
-                _save_partial_artifacts(
-                    project_id,
-                    user_message=user_message,
-                    character_bible=character_bible,
-                )
-                _append_trace(
-                    project_id,
-                    "character_bible",
-                    "角色基础已完成。",
-                    status="done",
-                    preview=_safe_preview(character_bible, 180),
-                )
 
-                # 2) 当前集计划（内部先用 episode_plan 组织本集）
-                stage_being_processed = "plot_outline"
-                _update_task_stage(
-                    task_id,
-                    "plot_outline",
-                    status="running",
-                    message="我先整理本集的剧情计划和冲突节点。",
-                )
-                _append_trace(
-                    project_id,
-                    "plot_outline",
-                    "我先整理本集的剧情计划和冲突节点。",
-                    status="running",
-                )
-
-                episode_plan_meta = dict(meta)
-                episode_plan_meta["output_granularity"] = "episode_plan"
-
-                episode_plan = _call_api_for_chat(
-                    _build_outline_prompt(user_message, word_count_wan, character_bible, episode_plan_meta),
+                # 2) 分集计划
+                plot_outline = _call_api_for_chat(
+                    _build_outline_prompt(user_message, word_count_wan, character_bible, meta),
                     selected_model=selected_model,
                 )
-                _save_partial_artifacts(
-                    project_id,
-                    user_message=user_message,
-                    plot_outline=episode_plan,
-                )
-                _append_trace(
-                    project_id,
-                    "plot_outline",
-                    "本集计划已完成。",
-                    status="done",
-                    preview=_safe_preview(episode_plan, 180),
-                )
 
-                # 3) 直接生成单集剧本
-                stage_being_processed = "final_script"
-                _update_task_stage(
-                    task_id,
-                    "final_script",
-                    status="running",
-                    message="正在生成单集生产格式剧本。",
-                )
-                _append_trace(
-                    project_id,
-                    "final_script",
-                    "正在生成单集生产格式剧本。",
-                    status="running",
-                )
-
-                final_script = _call_api_for_chat(
-                    _build_single_episode_script_prompt(
-                        user_message,
-                        word_count_wan,
-                        character_bible,
-                        episode_plan,
-                        meta,
-                    ),
+                # 3) 审核分集计划（可保留，但不当最终剧本）
+                review_report = _call_api_for_chat(
+                    _build_review_prompt(user_message, character_bible, plot_outline, meta),
                     selected_model=selected_model,
                 )
-                _save_partial_artifacts(
-                    project_id,
-                    user_message=user_message,
-                    final_script=final_script,
-                )
-                _append_trace(
-                    project_id,
-                    "final_script",
-                    "单集剧本已完成。",
-                    status="done",
-                    preview=_safe_preview(final_script, 180),
-                )
 
-                # 单集剧本模式下，不输出 review_report
+                # 4) 按集生成正文
+                episode_total = int(meta.get("episode_count") or 10)  # 先给个默认，后面可从计划解析
+                episode_scripts = []
+
+                for episode_no in range(1, episode_total + 1):
+                    current_episode_plan = _extract_episode_plan_slice(plot_outline, episode_no)
+
+                    ep_script = _call_api_for_chat(
+                        _build_episode_script_prompt(
+                            user_message,
+                            word_count_wan,
+                            character_bible,
+                            current_episode_plan,
+                            episode_no,
+                            meta,
+                        ),
+                        selected_model=selected_model,
+                    )
+                    episode_scripts.append(ep_script)
+
+                # 5) 合并成最终剧本合集
+                final_script = _merge_episode_scripts(episode_scripts)
+
+                # 6) 存储
                 _save_project_artifacts(
                     project_id,
                     user_message=user_message,
                     final_script=final_script,
                     character_bible=character_bible,
-                    plot_outline=episode_plan,
-                    review_report="",
+                    plot_outline=plot_outline,
+                    review_report=review_report,
                 )
-
-                _update_task_stage(
-                    task_id,
-                    "done",
-                    status="done",
-                    message="单集剧本已完成。",
-                )
-                _append_trace(
-                    project_id,
-                    "done",
-                    "单集剧本已完成。",
-                    status="done",
-                )
-                return
 
             # ============================================================
             # 分支 B：场景资产提取
@@ -1567,6 +1489,43 @@ def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, 
                 f"这一阶段未能完成：{str(e)}",
                 status="failed",
             )
+
+
+def _merge_episode_scripts(episodes):
+    valid = []
+    for ep in episodes:
+        text = (ep or "").strip()
+        if text:
+            valid.append(text)
+    return "\n\n".join(valid)
+
+
+def _build_episode_script_prompt(user_message, word_count_wan, character_bible, episode_plan, episode_no, meta):
+    data = _build_chat_prompt_data(
+        user_message,
+        word_count_wan,
+        meta,
+        history=character_bible,
+        current_episode_plan=episode_plan,
+        episode_no=episode_no,
+        source_text=user_message,
+    )
+    return compose_prompt("single_episode_script", data, mode=meta.get("mode"))
+
+
+def _extract_episode_plan_slice(full_plan_text, episode_no):
+    marker = f"第{episode_no}集"
+    next_marker = f"第{episode_no + 1}集"
+
+    start = full_plan_text.find(marker)
+    if start == -1:
+        return full_plan_text
+
+    end = full_plan_text.find(next_marker, start + len(marker))
+    if end == -1:
+        return full_plan_text[start:].strip()
+
+    return full_plan_text[start:end].strip()
 
 
 @api.route('/model/current', methods=['GET'])
