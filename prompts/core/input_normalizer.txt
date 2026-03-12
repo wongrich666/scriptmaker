@@ -40,6 +40,16 @@
 - banned_items: 禁止项数组
 - must_keep: 用户明确要求必须保留的元素
 - uncertainty_notes: 当前仍不明确、后续模块需要谨慎处理的点
+- 必须把用户需求转译成“短剧冲突执行参数”，至少明确：
+  1. 开篇爆点类型
+  2. 主羞辱事件
+  3. 主代价事件
+  4. 关系炸点
+  5. 本项目最适合的钩子类型
+- 若用户目标为短剧/漫剧，必须给出：
+  - 每集建议小反转数量
+  - 每集建议大钩子类型
+  - 禁止重复使用的弱冲突模式
 
 # Output Contract:
 请只输出一个 JSON 对象，字段结构如下：
@@ -58,18 +68,16 @@
   "reference_text": "",
   "banned_items": [],
   "must_keep": [],
-  "uncertainty_notes": []
-  "opening_bomb_type": "",
-  "opening_bomb_event": "",
-  "core_emotional_pain": "",
-  "public_humiliation_point": "",
-  "irreversible_cost": "",
-  "reality_issue": "",
-  "hook_style": "",
-  "face_slap_style": "",
-  "episode_end_payoff_type": "",
-  "relationship_dynamite": "",
-  "forbidden_weak_patterns": []
+  "uncertainty_notes": [],
+  "micro_hook_density": "",
+  "episode_reversal_density": "",
+  "primary_hate_event": "",
+  "primary_face_slap_event": "",
+  "relationship_betrayal_trigger": "",
+  "must_open_with_concrete_event": true,
+  "forbidden_flat_conflicts": [],
+  "midpoint_false_victory_type": "",
+  "cliffhanger_pool": []
 }
 
 # Failure Policy:

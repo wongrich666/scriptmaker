@@ -37,7 +37,7 @@ const STAGE_ORDER_MAP = {
     { stage: "queued", label: "已创建任务" },
     { stage: "plot_outline", label: "场景识别" },
     { stage: "final_script", label: "场景资产" }
-  ]
+  ],
   multi_episode_script: [
     { stage: "queued", label: "已创建任务" },
     { stage: "character_bible", label: "角色基础" },
@@ -89,17 +89,6 @@ const frameworkInput = document.getElementById("frameworkInput");
 const bannedInput = document.getElementById("bannedInput");
 const currentEpisodeInput = document.getElementById("currentEpisodeInput");
 const episodeCounterText = document.getElementById("episodeCounterText");
-
-function updateEpisodeCounter(task) {
-  if (!episodeCounterText) return;
-
-  const total = Number(task.episode_count || 0);
-  const done = Number(task.generated_episode_count || 0);
-
-  if (getCurrentGranularity() !== "multi_episode_script" || !total) {
-    episodeCounterText.textContent = "";
-    return;
-  }
 
   episodeCounterText.textContent = `当前已生成 ${done} 集，共 ${total} 集`;
 }
@@ -737,6 +726,18 @@ function initSplitters() {
 
   applyLayout();
 }
+
+function updateEpisodeCounter(task) {
+  if (!episodeCounterText) return;
+
+  const total = Number(task.episode_count || 0);
+  const done = Number(task.generated_episode_count || 0);
+
+  if (getCurrentGranularity() !== "multi_episode_script" || !total) {
+    episodeCounterText.textContent = "";
+    return;
+  }
+
 
 document.querySelectorAll(".tab-btn").forEach((btn) => {
   btn.addEventListener("click", () => {

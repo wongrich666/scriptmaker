@@ -56,8 +56,8 @@ import sys
 import os
 import chat_api
 
-print("chat_api file =", chat_api.__file__)
-print("api blueprint deferred_functions =", len(api.deferred_functions))
+# print("chat_api file =", chat_api.__file__)
+# print("api blueprint deferred_functions =", len(api.deferred_functions))
 
 # 创建日志目录
 log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
