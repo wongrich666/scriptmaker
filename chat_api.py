@@ -204,6 +204,28 @@ def _build_http_session():
     return http_session
 
 
+def _build_single_episode_script_prompt(user_message, word_count_wan, character_bible, episode_plan, meta):
+    data = _build_chat_prompt_data(
+        user_message,
+        word_count_wan,
+        meta,
+        history=character_bible,
+        current_episode_plan=episode_plan,
+        source_text=user_message,
+    )
+    return compose_prompt("single_episode_script", data, mode=meta.get("mode"))
+
+
+def _build_scene_asset_extract_prompt(user_message, word_count_wan, meta):
+    data = _build_chat_prompt_data(
+        user_message,
+        word_count_wan,
+        meta,
+        source_text=user_message,
+    )
+    return compose_prompt("scene_asset_extract", data, mode=meta.get("mode"))
+
+
 _HTTP_SESSION = _build_http_session()
 
 
@@ -1160,14 +1182,211 @@ def _build_final_script_prompt(user_message, word_count_wan, character_bible, pl
 
 def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, selected_model):
     stage_being_processed = "queued"
-    word_count_wan = meta.get("word_count_wan", 2)
+
     with app.app_context():
         try:
-            word_count_wan = meta.get("word_count_wan")
+            word_count_wan = meta.get("word_count_wan", 2)
             try:
                 word_count_wan = float(word_count_wan)
             except Exception:
                 word_count_wan = 2
+
+            granularity = meta.get("output_granularity", "outline")
+
+            # ============================================================
+            # 分支 A：单集剧本
+            # ============================================================
+            if granularity == "single_episode_script":
+                # 1) 人物基础
+                stage_being_processed = "character_bible"
+                _update_task_stage(
+                    task_id,
+                    "character_bible",
+                    status="running",
+                    message="我先补齐本集所需的角色基础。",
+                )
+                _append_trace(
+                    project_id,
+                    "character_bible",
+                    "我先补齐本集所需的角色基础。",
+                    status="running",
+                )
+
+                character_bible = _call_api_for_chat(
+                    _build_character_prompt(user_message, word_count_wan, meta),
+                    selected_model=selected_model,
+                )
+                _save_partial_artifacts(
+                    project_id,
+                    user_message=user_message,
+                    character_bible=character_bible,
+                )
+                _append_trace(
+                    project_id,
+                    "character_bible",
+                    "角色基础已完成。",
+                    status="done",
+                    preview=_safe_preview(character_bible, 180),
+                )
+
+                # 2) 当前集计划（内部先用 episode_plan 组织本集）
+                stage_being_processed = "plot_outline"
+                _update_task_stage(
+                    task_id,
+                    "plot_outline",
+                    status="running",
+                    message="我先整理本集的剧情计划和冲突节点。",
+                )
+                _append_trace(
+                    project_id,
+                    "plot_outline",
+                    "我先整理本集的剧情计划和冲突节点。",
+                    status="running",
+                )
+
+                episode_plan_meta = dict(meta)
+                episode_plan_meta["output_granularity"] = "episode_plan"
+
+                episode_plan = _call_api_for_chat(
+                    _build_outline_prompt(user_message, word_count_wan, character_bible, episode_plan_meta),
+                    selected_model=selected_model,
+                )
+                _save_partial_artifacts(
+                    project_id,
+                    user_message=user_message,
+                    plot_outline=episode_plan,
+                )
+                _append_trace(
+                    project_id,
+                    "plot_outline",
+                    "本集计划已完成。",
+                    status="done",
+                    preview=_safe_preview(episode_plan, 180),
+                )
+
+                # 3) 直接生成单集剧本
+                stage_being_processed = "final_script"
+                _update_task_stage(
+                    task_id,
+                    "final_script",
+                    status="running",
+                    message="正在生成单集生产格式剧本。",
+                )
+                _append_trace(
+                    project_id,
+                    "final_script",
+                    "正在生成单集生产格式剧本。",
+                    status="running",
+                )
+
+                final_script = _call_api_for_chat(
+                    _build_single_episode_script_prompt(
+                        user_message,
+                        word_count_wan,
+                        character_bible,
+                        episode_plan,
+                        meta,
+                    ),
+                    selected_model=selected_model,
+                )
+                _save_partial_artifacts(
+                    project_id,
+                    user_message=user_message,
+                    final_script=final_script,
+                )
+                _append_trace(
+                    project_id,
+                    "final_script",
+                    "单集剧本已完成。",
+                    status="done",
+                    preview=_safe_preview(final_script, 180),
+                )
+
+                # 单集剧本模式下，不输出 review_report
+                _save_project_artifacts(
+                    project_id,
+                    user_message=user_message,
+                    final_script=final_script,
+                    character_bible=character_bible,
+                    plot_outline=episode_plan,
+                    review_report="",
+                )
+
+                _update_task_stage(
+                    task_id,
+                    "done",
+                    status="done",
+                    message="单集剧本已完成。",
+                )
+                _append_trace(
+                    project_id,
+                    "done",
+                    "单集剧本已完成。",
+                    status="done",
+                )
+                return
+
+            # ============================================================
+            # 分支 B：场景资产提取
+            # ============================================================
+            if granularity == "scene_asset_extract":
+                stage_being_processed = "plot_outline"
+                _update_task_stage(
+                    task_id,
+                    "plot_outline",
+                    status="running",
+                    message="正在识别核心场景与场景层级。",
+                )
+                _append_trace(
+                    project_id,
+                    "plot_outline",
+                    "正在识别核心场景与场景层级。",
+                    status="running",
+                )
+
+                scene_assets = _call_api_for_chat(
+                    _build_scene_asset_extract_prompt(user_message, word_count_wan, meta),
+                    selected_model=selected_model,
+                )
+                _save_partial_artifacts(
+                    project_id,
+                    user_message=user_message,
+                    final_script=scene_assets,
+                )
+                _append_trace(
+                    project_id,
+                    "final_script",
+                    "场景资产提取已完成。",
+                    status="done",
+                    preview=_safe_preview(scene_assets, 180),
+                )
+
+                _save_project_artifacts(
+                    project_id,
+                    user_message=user_message,
+                    final_script=scene_assets,
+                    character_bible="",
+                    plot_outline="",
+                    review_report="",
+                )
+
+                _update_task_stage(
+                    task_id,
+                    "done",
+                    status="done",
+                    message="场景资产已完成。",
+                )
+                _append_trace(
+                    project_id,
+                    "done",
+                    "场景资产已完成。",
+                    status="done",
+                )
+                return
+
+            # ============================================================
+            # 分支 C：总纲 / 分集计划（保留审核流）
+            # ============================================================
 
             # 1) 人物设定
             stage_being_processed = "character_bible"
@@ -1175,14 +1394,15 @@ def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, 
                 task_id,
                 "character_bible",
                 status="running",
-                message="我先帮你把人物关系搭起来，先确定主角、核心对手和关键配角。",
+                message="我先帮你把人物关系搭起来，先确定主角、对手和关键配角。",
             )
             _append_trace(
                 project_id,
                 "character_bible",
-                "我先帮你把人物关系搭起来，先确定主角、核心对手和关键配角。",
+                "我先帮你把人物关系搭起来，先确定主角、对手和关键配角。",
                 status="running",
             )
+
             character_bible = _call_api_for_chat(
                 _build_character_prompt(user_message, word_count_wan, meta),
                 selected_model=selected_model,
@@ -1200,20 +1420,27 @@ def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, 
                 preview=_safe_preview(character_bible, 180),
             )
 
-            # 2) 剧情大纲
+            # 2) 大纲 / 分集计划
             stage_being_processed = "plot_outline"
+            outline_message = "现在开始搭剧情骨架，梳理故事主线、阶段推进和关键反转。"
+            outline_done_message = "剧情大纲已完成，主线结构已经清晰。"
+            if granularity == "episode_plan":
+                outline_message = "现在开始拆分分集计划，梳理每集目标、反转与钩子。"
+                outline_done_message = "分集计划已完成，节奏结构已经清晰。"
+
             _update_task_stage(
                 task_id,
                 "plot_outline",
                 status="running",
-                message="现在开始搭剧情骨架，梳理故事主线、阶段推进和关键反转。",
+                message=outline_message,
             )
             _append_trace(
                 project_id,
                 "plot_outline",
-                "现在开始搭剧情骨架，梳理故事主线、阶段推进和关键反转。",
+                outline_message,
                 status="running",
             )
+
             plot_outline = _call_api_for_chat(
                 _build_outline_prompt(user_message, word_count_wan, character_bible, meta),
                 selected_model=selected_model,
@@ -1226,25 +1453,26 @@ def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, 
             _append_trace(
                 project_id,
                 "plot_outline",
-                "剧情大纲已完成，主线结构已经清晰。",
+                outline_done_message,
                 status="done",
                 preview=_safe_preview(plot_outline, 180),
             )
 
-            # 3) 审核意见
+            # 3) 审核意见（仅总纲 / 分集计划保留）
             stage_being_processed = "review_report"
             _update_task_stage(
                 task_id,
                 "review_report",
                 status="running",
-                message="我在检查这个方案的节奏、逻辑和商业化潜力。",
+                message="我在检查这个方案的结构、节奏和格式合规性。",
             )
             _append_trace(
                 project_id,
                 "review_report",
-                "我在检查这个方案的节奏、逻辑和商业化潜力。",
+                "我在检查这个方案的结构、节奏和格式合规性。",
                 status="running",
             )
+
             review_report = _call_api_for_chat(
                 _build_review_prompt(user_message, character_bible, plot_outline, meta),
                 selected_model=selected_model,
@@ -1262,7 +1490,7 @@ def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, 
                 preview=_safe_preview(review_report, 180),
             )
 
-            # 4) 最终稿
+            # 4) 最终修订稿（仅总纲 / 分集计划保留）
             stage_being_processed = "final_script"
             _update_task_stage(
                 task_id,
@@ -1276,9 +1504,16 @@ def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, 
                 "正在整合前面的内容，生成最终版本。",
                 status="running",
             )
+
             final_script = _call_api_for_chat(
-                _build_final_script_prompt(user_message, word_count_wan, character_bible, plot_outline, review_report,
-                                           meta),
+                _build_final_script_prompt(
+                    user_message,
+                    word_count_wan,
+                    character_bible,
+                    plot_outline,
+                    review_report,
+                    meta,
+                ),
                 selected_model=selected_model,
             )
             _save_partial_artifacts(
@@ -1289,12 +1524,11 @@ def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, 
             _append_trace(
                 project_id,
                 "final_script",
-                "最终稿主体已经生成，正在做最后整理。",
+                "最终稿已完成。",
                 status="done",
                 preview=_safe_preview(final_script, 180),
             )
 
-            # 5) 收尾
             _save_project_artifacts(
                 project_id,
                 user_message=user_message,
