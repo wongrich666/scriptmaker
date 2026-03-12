@@ -15,6 +15,8 @@ PROMPT_MANIFEST = {
     "outline": {
         "outline": "core/story_outline.txt",
         "episode_plan": "core/episode_plan.txt",
+        "single_episode_script": "core/single_episode_script.txt",
+        "scene_asset_extract": "core/scene_asset_extract.txt",
     },
     "review_report": "core/review_report.txt",
     "final_rewrite": "core/final_rewrite.txt",
@@ -30,10 +32,10 @@ LEGACY_FALLBACK = {
     "content_check": "content_check.txt",
 }
 
-MODE_MANIFEST = {
-    "reskin_longform": "modes/reskin_longform.txt",
-    "short_drama_cn": "modes/short_drama_cn.txt",
-    "novel_serial": "modes/novel_serial.txt",
+MODEL_MANIFEST = {
+    "reskin_longform": "models/reskin_longform.txt",
+    "short_drama_cn": "models/short_drama_cn.txt",
+    "novel_serial": "models/novel_serial.txt",
     "": None,
     None: None,
 }
@@ -67,12 +69,12 @@ def normalize_output_granularity(value: Optional[str]) -> str:
 
 def normalize_mode(value: Optional[str]) -> str:
     value = (value or "").strip().lower()
-    if value in MODE_MANIFEST:
+    if value in MODEL_MANIFEST:
         return value
     return ""
 
 
-def _safe_json_text(value: Any) -> str:
+def _safe_text(value: Any) -> str:
     if value is None:
         return ""
     if isinstance(value, (dict, list)):
@@ -112,9 +114,9 @@ def load_prompt_text(task_name: str, granularity: Optional[str] = None) -> str:
         return f.read().strip()
 
 
-def load_mode_profile(mode: Optional[str]) -> str:
+def load_model_profile(mode: Optional[str]) -> str:
     mode = normalize_mode(mode)
-    rel_path = MODE_MANIFEST.get(mode)
+    rel_path = MODEL_MANIFEST.get(mode)
     if not rel_path:
         return ""
 
@@ -164,8 +166,8 @@ def build_structured_input_block(data: Dict[str, Any]) -> str:
         value = data.get(key)
         if value in (None, "", [], {}):
             continue
-        lines.append(f"【{label}】")
-        lines.append(_safe_json_text(value))
+        lines.append(f"")
+        lines.append(_safe_text(value))
         lines.append("")
 
     return "\n".join(lines).strip()
@@ -174,12 +176,12 @@ def build_structured_input_block(data: Dict[str, Any]) -> str:
 def compose_prompt(task_name: str, data: Dict[str, Any], mode: Optional[str] = None) -> str:
     granularity = data.get("output_granularity")
     core_prompt = load_prompt_text(task_name, granularity=granularity)
-    mode_profile = load_mode_profile(mode or data.get("mode"))
+    model_profile = load_model_profile(mode or data.get("mode"))
     input_block = build_structured_input_block(data)
 
     parts = [core_prompt]
-    if mode_profile:
-        parts.append("\n\n# Mode Profile\n" + mode_profile)
+    if model_profile:
+        parts.append("\n\n# Model Profile\n" + model_profile)
     parts.append("\n\n" + input_block)
 
     return "".join(parts).strip()

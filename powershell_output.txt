@@ -3931,7 +3931,7 @@ def generate():
         prompt_template = load_prompt_template(field_name+optimize)
 
         # 鏇挎崲妯℃澘涓殑瀛楁
-        prompt = build_prompt(field_name, data)
+        prompt = prompt_template.format(**data)
 
         # 鐢熸垚鍐呭
         generated_content = call_api(prompt)
@@ -3965,7 +3965,7 @@ def generate_outline():
         prompt_template = load_prompt_template(field_name+optimize)
         # 浠庢暟鎹簱涓幏鍙栧綋鍓嶆晠浜嬬殑鎵€鏈夎鑹诧紝鏇挎崲妯℃澘涓殑{history}閮ㄥ垎
         data['history'] = get_characters(script_id)
-        prompt = build_prompt(field_name, data)
+        prompt = prompt_template.format(**data)
         # 鐢熸垚鍐呭
         generated_content = call_api(prompt)
 
@@ -4017,7 +4017,7 @@ def generate_chapter():
                     mind_map = chapter
                     break
         data['mind_map'] = json.dumps(mind_map, ensure_ascii=False)
-        prompt = build_prompt(field_name, data)
+        prompt = prompt_template.format(**data)
         # 鐢熸垚鍐呭
         generated_content = call_api(prompt)
 
@@ -4054,7 +4054,7 @@ def generate_mind():
             data['title'] = chapter.title
             data['number'] = chapter.number
             data['outline'] = chapter.chapter_outline
-            prompt = build_prompt(field_name, data)
+            prompt = prompt_template.format(**data)
             generated_content = call_api(prompt)
             json_data = generated_content.replace('```json', '').replace('```', '')
             # 瑙ｆ瀽鐢熸垚鐨凧SON鏁扮粍
@@ -4094,7 +4094,7 @@ def generate_chapters():
         data['from'] = from_number
         data['to'] = from_number + number - 1
         # 鏇挎崲鎵€鏈夊瓧娈?
-        prompt = build_prompt(field_name, data)
+        prompt = prompt_template.format(**data)
         # 鐢熸垚鍐呭
         generated_content = call_api(prompt)
         json_data = generated_content.replace('```json', '').replace('```', '')
@@ -4150,7 +4150,7 @@ def generate_characters():
         # 浠庢暟鎹簱涓幏鍙栧綋鍓嶆晠浜嬬殑鎵€鏈夎鑹?
         # 鏇挎崲妯℃澘涓殑{history}閮ㄥ垎
         data['history'] = get_characters(script_id)
-        prompt = build_prompt(field_name, data)
+        prompt = prompt_template.format(**data)
         # 鐢熸垚鍐呭
         generated_content = call_api(prompt)
         json_data = generated_content.replace('```json', '').replace('```', '')
@@ -4207,7 +4207,7 @@ def optimize_character():
         prompt_template = load_prompt_template('character_optimize')
         # 浠庢暟鎹簱涓幏鍙栭櫎浜嗗綋鍓嶈鑹蹭箣澶栫殑鍏朵粬瑙掕壊锛屾浛鎹㈡ā鏉夸腑鐨剓history}閮ㄥ垎
         data['history'] = get_characters(script_id, character_id)
-        prompt = build_prompt(field_name, data)
+        prompt = prompt_template.format(**data)
         # 鐢熸垚鍐呭
         generated_content = call_api(prompt)
 

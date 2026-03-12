@@ -51,6 +51,14 @@ const timelineList = document.getElementById("timelineList");
 const timelineCountText = document.getElementById("timelineCountText");
 const slowTipText = document.getElementById("slowTipText");
 
+const genreInput = document.getElementById("genreInput");
+const styleInput = document.getElementById("styleInput");
+const granularitySelect = document.getElementById("granularitySelect");
+const modeSelect = document.getElementById("modeSelect");
+const referenceInput = document.getElementById("referenceInput");
+const frameworkInput = document.getElementById("frameworkInput");
+const bannedInput = document.getElementById("bannedInput");
+
 document.querySelectorAll(".tab-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
@@ -379,16 +387,41 @@ async function handleSend() {
   if (timelineList) timelineList.innerHTML = `<div class="timeline-empty">正在创建任务...</div>`;
   if (timelineCountText) timelineCountText.textContent = "0 条更新";
 
-  addMessage("user", `〖字数〗${wordCountWan}万字\n〖需求〗${message}`);
+  const genre = genreInput ? genreInput.value.trim() : "";
+  const style = styleInput ? styleInput.value.trim() : "";
+  const outputGranularity = granularitySelect ? granularitySelect.value : "outline";
+  const mode = modeSelect ? modeSelect.value : "";
+  const referenceText = referenceInput ? referenceInput.value.trim() : "";
+  const frameworkText = frameworkInput ? frameworkInput.value.trim() : "";
+  const banned = bannedInput ? bannedInput.value.trim() : "";
+
+  const summaryLines = [`〖字数〗${wordCountWan}万字`];
+  if (genre) summaryLines.push(`〖题材〗${genre}`);
+  if (style) summaryLines.push(`〖风格〗${style}`);
+  if (outputGranularity) summaryLines.push(`〖输出粒度〗${outputGranularity}`);
+  if (mode) summaryLines.push(`〖模式〗${mode}`);
+  if (frameworkText) summaryLines.push(`〖框架〗${frameworkText}`);
+  if (referenceText) summaryLines.push(`〖参考〗${referenceText}`);
+  if (banned) summaryLines.push(`〖禁止项〗${banned}`);
+  summaryLines.push(`〖需求〗${message}`);
+
+  addMessage("user", summaryLines.join("\n"));
   addMessage("system", "已收到你的需求，我会先搭人物，再搭剧情，再做审核和整合。");
 
   const payload = {
-    project_id: currentProjectId,
-    message,
-    meta: {
-      word_count_wan: wordCountWan
-    }
-  };
+      project_id: currentProjectId,
+      message: message,
+      meta: {
+        word_count_wan: wordCountWan,
+        genre: genre,
+        style: style,
+        output_granularity: outputGranularity,
+        mode: mode,
+        reference_text: referenceText,
+        framework_text: frameworkText,
+        banned: banned
+      }
+    };
 
   try {
     const resp = await fetch(window.chatConfig.sendUrl, {

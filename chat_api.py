@@ -23,7 +23,12 @@ from requests.exceptions import ChunkedEncodingError, ConnectionError as Request
 from urllib3.util.retry import Retry
 from datetime import datetime, timezone
 from flask import current_app
-
+from prompt_runtime import (
+    compose_prompt,
+    extract_json_from_text,
+    resolve_prompt_path,
+    normalize_output_granularity,
+)
 from urllib.parse import urlparse
 from models import CharacterModel, ChapterModel, ScriptModel, db
 from flask import Blueprint, request, jsonify, session
@@ -32,12 +37,6 @@ from io import BytesIO
 from werkzeug.utils import secure_filename
 from bs4 import BeautifulSoup
 from pypdf import PdfReader
-from prompt_runtime import (
-    compose_prompt,
-    extract_json_from_text,
-    resolve_prompt_path,
-    normalize_output_granularity,
-)
 
 api = Blueprint('api', __name__)
 
@@ -70,17 +69,14 @@ def parse_template_fields(template):
     return list(set(fields))  # 去重
 
 
-def load_prompt_template(field_name, data=None):
-    data = data or {}
-    granularity = data.get("output_granularity")
-    path = resolve_prompt_path(field_name, granularity=granularity)
-    with open(path, "r", encoding="utf-8") as f:
+def load_prompt_template(field_name):
+    """加载提示词模板"""
+    prompt_file = os.path.join('prompts', f'{field_name}.txt')
+    if not os.path.exists(prompt_file):
+        raise FileNotFoundError(f'提示词模板文件 {prompt_file} 不存在')
+
+    with open(prompt_file, 'r', encoding='utf-8') as f:
         return f.read()
-
-
-def build_prompt(field_name, data):
-    mode = data.get("mode") or ""
-    return compose_prompt(field_name, data, mode=mode)
 
 
 def _looks_like_openai_compatible_host(host):
@@ -127,6 +123,59 @@ def _extract_json_from_model_output(text):
         raise ValueError("模型返回中未找到有效 JSON 内容")
 
     return json.loads(match.group(1))
+
+
+def _normalize_banned_items(raw_value):
+    if isinstance(raw_value, list):
+        return [str(x).strip() for x in raw_value if str(x).strip()]
+
+    text = str(raw_value or "").strip()
+    if not text:
+        return []
+
+    parts = re.split(r"[\n;,，；]+", text)
+    cleaned = []
+    for item in parts:
+        item = item.strip().lstrip("-").lstrip("•").strip()
+        if item:
+            cleaned.append(item)
+    return cleaned
+
+
+def _normalize_chat_meta(meta):
+    meta = dict(meta or {})
+
+    try:
+        word_count_wan = float(meta.get("word_count_wan", 2))
+    except Exception:
+        word_count_wan = 2.0
+
+    return {
+        "word_count_wan": word_count_wan,
+        "genre": str(meta.get("genre") or "").strip(),
+        "style": str(meta.get("style") or "").strip(),
+        "output_granularity": normalize_output_granularity(meta.get("output_granularity")),
+        "reference_text": str(meta.get("reference_text") or "").strip(),
+        "framework_text": str(meta.get("framework_text") or "").strip(),
+        "banned_items": _normalize_banned_items(meta.get("banned") or meta.get("banned_items")),
+        "mode": str(meta.get("mode") or "").strip(),
+    }
+
+
+def _build_chat_prompt_data(user_message, word_count_wan, meta, **kwargs):
+    data = {
+        "additional_requirements": user_message,
+        "word_count": word_count_wan,
+        "target_length": f"{word_count_wan}万字",
+        "genre": meta.get("genre", ""),
+        "style": meta.get("style", ""),
+        "output_granularity": meta.get("output_granularity", "outline"),
+        "reference_text": meta.get("reference_text", ""),
+        "framework_text": meta.get("framework_text", ""),
+        "banned_items": meta.get("banned_items", []),
+    }
+    data.update(kwargs)
+    return data
 
 
 def _build_http_session():
@@ -1064,88 +1113,48 @@ def _save_partial_artifacts(
     )
 
 
-def _build_character_prompt(user_message, word_count_wan):
-    return f'''你现在是“人物编剧”。
-请根据用户需求，输出一份完整的人物设定文档。
-
-要求：
-1. 至少包含：主角、核心对手、关键配角。
-2. 每个角色至少写：姓名、身份、年龄层、性格关键词、表层目标、真实欲望、主要矛盾、与主角关系、人物弧光。
-3. 先给“角色总览”，再展开重点人物。
-4. 输出必须是中文，结构清晰，适合后续继续生成剧情。
-
-目标字数：约 {word_count_wan} 万字项目
-用户需求：
-{user_message}'''
+def _build_character_prompt(user_message, word_count_wan, meta):
+    data = _build_chat_prompt_data(
+        user_message,
+        word_count_wan,
+        meta,
+        source_text=user_message,
+    )
+    return compose_prompt("characters", data, mode=meta.get("mode"))
 
 
-def _build_outline_prompt(user_message, word_count_wan, character_bible):
-    return f'''你现在是“剧情编剧”。
-请基于用户需求和人物设定，输出一份剧情大纲。
-
-要求：
-1. 先给一句话卖点。
-2. 再给故事总纲。
-3. 再给“三幕式/阶段式”推进。
-4. 再给关键反转、高潮、结尾落点。
-5. 再给可直接进入分章写作的章节/集数规划。
-6. 输出必须是中文，结构清晰。
-
-目标字数：约 {word_count_wan} 万字项目
-用户需求：
-{user_message}
-
-人物设定：
-{character_bible}'''
+def _build_outline_prompt(user_message, word_count_wan, character_bible, meta):
+    data = _build_chat_prompt_data(
+        user_message,
+        word_count_wan,
+        meta,
+        history=character_bible,
+        source_text=user_message,
+    )
+    return compose_prompt("outline", data, mode=meta.get("mode"))
 
 
-def _build_review_prompt(user_message, character_bible, plot_outline):
-    return f'''你现在是“审核编剧”。
-请审查下面这套项目方案是否适合商业化网文/短剧开发。
-
-请输出：
-1. 总体判断
-2. 亮点
-3. 风险点
-4. 逻辑漏洞
-5. 人物问题
-6. 节奏问题
-7. 修改建议
-
-用户需求：
-{user_message}
-
-人物设定：
-{character_bible}
-
-剧情大纲：
-{plot_outline}'''
+def _build_review_prompt(user_message, character_bible, plot_outline, meta):
+    data = _build_chat_prompt_data(
+        user_message,
+        meta.get("word_count_wan", 2),
+        meta,
+        history=character_bible,
+        content=plot_outline,
+    )
+    return compose_prompt("review_report", data, mode=meta.get("mode"))
 
 
-def _build_final_script_prompt(user_message, word_count_wan, character_bible, plot_outline, review_report):
-    return f'''你现在是“总编剧”。
-请综合用户需求、人物设定、剧情大纲和审核意见，输出最终创作稿。
-
-要求：
-1. 先给项目定位与题眼。
-2. 再给最终版故事总纲。
-3. 再给详细阶段推进。
-4. 再给主要人物在最终稿中的关系和冲突安排。
-5. 最后给一个高完成度的开篇样章/样集正文。
-6. 输出必须是中文，可读性强，避免空泛口号。
-
-目标字数：约 {word_count_wan} 万字项目
-用户需求：
-{user_message}
-
-人物设定：
-{character_bible}
-
-剧情大纲：
-{plot_outline}
-
-审核意见：
-{review_report}'''
+def _build_final_script_prompt(user_message, word_count_wan, character_bible, plot_outline, review_report, meta):
+    data = _build_chat_prompt_data(
+        user_message,
+        word_count_wan,
+        meta,
+        history=character_bible,
+        content=plot_outline,
+        review_report=review_report,
+    )
+    return compose_prompt("final_rewrite", data, mode=meta.get("mode"))
 
 
 def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, selected_model):
@@ -1205,7 +1214,7 @@ def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, 
                 status="running",
             )
             plot_outline = _call_api_for_chat(
-                _build_outline_prompt(user_message, word_count_wan, character_bible),
+                _build_outline_prompt(user_message, word_count_wan, character_bible, meta),
                 selected_model=selected_model,
             )
             _save_partial_artifacts(
@@ -1236,7 +1245,7 @@ def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, 
                 status="running",
             )
             review_report = _call_api_for_chat(
-                _build_review_prompt(user_message, character_bible, plot_outline),
+                _build_review_prompt(user_message, character_bible, plot_outline, meta),
                 selected_model=selected_model,
             )
             _save_partial_artifacts(
@@ -1267,7 +1276,7 @@ def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, 
                 status="running",
             )
             final_script = _call_api_for_chat(
-                _build_final_script_prompt(user_message, word_count_wan, character_bible, plot_outline, review_report),
+                _build_final_script_prompt(user_message, word_count_wan, character_bible, plot_outline, review_report, meta),
                 selected_model=selected_model,
             )
             _save_partial_artifacts(
@@ -1371,7 +1380,7 @@ def chat_send():
         if not user_message:
             return jsonify({'success': False, 'message': 'message 不能为空'}), 400
 
-        meta = data.get('meta') or {}
+        _build_character_prompt(user_message, word_count_wan, meta)
         project_id = data.get('project_id')
         selected_model = _normalize_selected_model(data.get('model') or session.get('selected_model') or API)
 
