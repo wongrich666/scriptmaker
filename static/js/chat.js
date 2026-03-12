@@ -10,13 +10,38 @@ let lastTraceCount = 0;
 let lastTraceUpdateMs = 0;
 let taskStartedMs = 0;
 
-const STAGE_ORDER = [
-  { stage: "queued", label: "已创建任务" },
-  { stage: "character_bible", label: "人物设定" },
-  { stage: "plot_outline", label: "剧情大纲" },
-  { stage: "review_report", label: "审核意见" },
-  { stage: "final_script", label: "最终稿" }
-];
+const STAGE_ORDER_MAP = {
+  outline: [
+    { stage: "queued", label: "已创建任务" },
+    { stage: "character_bible", label: "人物设定" },
+    { stage: "plot_outline", label: "剧情大纲" },
+    { stage: "review_report", label: "审核意见" },
+    { stage: "final_script", label: "最终稿" }
+  ],
+  episode_plan: [
+    { stage: "queued", label: "已创建任务" },
+    { stage: "character_bible", label: "人物设定" },
+    { stage: "plot_outline", label: "分集计划" },
+    { stage: "review_report", label: "审核意见" },
+    { stage: "final_script", label: "最终稿" }
+  ],
+  single_episode_script: [
+    { stage: "queued", label: "已创建任务" },
+    { stage: "character_bible", label: "角色基础" },
+    { stage: "plot_outline", label: "本集计划" },
+    { stage: "final_script", label: "单集剧本" }
+  ],
+  scene_asset_extract: [
+    { stage: "queued", label: "已创建任务" },
+    { stage: "plot_outline", label: "场景识别" },
+    { stage: "final_script", label: "场景资产输出" }
+  ]
+};
+
+function getStageOrder() {
+  const value = granularitySelect ? granularitySelect.value : "outline";
+  return STAGE_ORDER_MAP[value] || STAGE_ORDER_MAP.outline;
+}
 
 const sendBtn = document.getElementById("sendBtn");
 const newChatBtn = document.getElementById("newChatBtn");
@@ -161,10 +186,11 @@ function setIdleProgressCard() {
 function renderProgressSteps(currentStage, status) {
   if (!progressStepList) return;
 
-  const currentIndex = STAGE_ORDER.findIndex((item) => item.stage === currentStage);
+  const stageOrder = getStageOrder();
+  const currentIndex = stageOrder.findIndex((item) => item.stage === currentStage);
   const allDone = status === "done";
 
-  progressStepList.innerHTML = STAGE_ORDER.map((item, idx) => {
+  progressStepList.innerHTML = stageOrder.map((item, idx) => {
     let stateClass = "pending";
     let marker = "○";
 

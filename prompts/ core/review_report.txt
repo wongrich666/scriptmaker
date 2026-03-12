@@ -75,13 +75,12 @@
 - 如果增强，会提升哪方面体验
 
 十一、格式合规检查
-请逐项检查：
-1. 当前输出是否符合目标粒度（outline / episode_plan / single_episode_script / scene_asset_extract）
-2. 是否混入了错误层级内容
-3. 是否出现开发案式前缀废话
-4. 是否出现与目标格式无关的总结、解释、包装语
-5. 若为单集剧本，是否真正进入“第X集 + 场景 + 动作/台词/特效”的生产格式
-6. 若格式不合规，请明确指出需要删除的前缀类型
+请检查当前输出是否符合目标粒度：
+若 output_granularity = outline：只能输出总纲层内容，不应混入逐集正文或制作格式。
+若 output_granularity = episode_plan：只能输出逐集计划，不应混入项目定位总结、样章正文、开发案废话。
+若 output_granularity = single_episode_script：必须直接进入“第X集 + 场景 + 动作/台词/特效”的生产格式；不得出现“项目定位 / 最终稿总结 / 修订重点 / 以下是结果”等前缀性废话。
+若 output_granularity = scene_asset_extract：只能输出场景资产和 props 信息，不应混入剧情总结或角色分析。
+若存在格式不合规，请明确指出：多余前缀是什么?哪些段落应删除?应改成哪种格式
 
 # Review Rules:
 1. 审核要像总编剧批注，不像评论区感想。
