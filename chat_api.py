@@ -146,12 +146,13 @@ def _normalize_chat_meta(meta):
     meta = dict(meta or {})
 
     try:
-        word_count_wan = float(meta.get("word_count_wan", 2))
+        raw_word_count = meta.get("word_count", meta.get("word_count", 2))
+        word_count = float(raw_word_count)
     except Exception:
-        word_count_wan = 2.0
+        word_count = 2.0
 
     return {
-        "word_count_wan": word_count_wan,
+        "word_count": word_count,
         "genre": str(meta.get("genre") or "").strip(),
         "style": str(meta.get("style") or "").strip(),
         "output_granularity": normalize_output_granularity(meta.get("output_granularity")),
@@ -162,11 +163,11 @@ def _normalize_chat_meta(meta):
     }
 
 
-def _build_chat_prompt_data(user_message, word_count_wan, meta, **kwargs):
+def _build_chat_prompt_data(user_message, word_count, meta, **kwargs):
     data = {
         "additional_requirements": user_message,
-        "word_count": word_count_wan,
-        "target_length": f"{word_count_wan}万字",
+        "word_count": word_count,
+        "target_length": f"{word_count}万字",
         "genre": meta.get("genre", ""),
         "style": meta.get("style", ""),
         "output_granularity": meta.get("output_granularity", "outline"),
@@ -1000,11 +1001,11 @@ def _get_project_result(project_id):
 
 def _ensure_project_for_user(project_id, user_id, user_message, meta=None):
     meta = meta or {}
-    word_count_wan = meta.get('word_count_wan') or 2
+    word_count = meta.get('word_count') or 2
     try:
-        word_count_wan = float(word_count_wan)
+        word_count = float(word_count)
     except Exception:
-        word_count_wan = 2
+        word_count = 2
 
     if project_id:
         script = ScriptModel.query.get(project_id)
@@ -1017,7 +1018,7 @@ def _ensure_project_for_user(project_id, user_id, user_message, meta=None):
         if not script.background:
             script.background = user_message or ''
         if not script.word_count:
-            script.word_count = int(word_count_wan * 10000)
+            script.word_count = int(word_count * 10000)
         db.session.commit()
         return script
 
@@ -1031,7 +1032,7 @@ def _ensure_project_for_user(project_id, user_id, user_message, meta=None):
         style='',
         write_style='chat_mvp',
         outline='',
-        word_count=int(word_count_wan * 10000),
+        word_count=int(word_count * 10000),
         style_type='2d_realistic',
         has_branching=False,
         mind_map='',
@@ -1113,20 +1114,20 @@ def _save_partial_artifacts(
     )
 
 
-def _build_character_prompt(user_message, word_count_wan, meta):
+def _build_character_prompt(user_message, word_count, meta):
     data = _build_chat_prompt_data(
         user_message,
-        word_count_wan,
+        word_count,
         meta,
         source_text=user_message,
     )
     return compose_prompt("characters", data, mode=meta.get("mode"))
 
 
-def _build_outline_prompt(user_message, word_count_wan, character_bible, meta):
+def _build_outline_prompt(user_message, word_count, character_bible, meta):
     data = _build_chat_prompt_data(
         user_message,
-        word_count_wan,
+        word_count,
         meta,
         history=character_bible,
         source_text=user_message,
@@ -1137,7 +1138,7 @@ def _build_outline_prompt(user_message, word_count_wan, character_bible, meta):
 def _build_review_prompt(user_message, character_bible, plot_outline, meta):
     data = _build_chat_prompt_data(
         user_message,
-        meta.get("word_count_wan", 2),
+        meta.get("word_count", 2),
         meta,
         history=character_bible,
         content=plot_outline,
@@ -1145,10 +1146,10 @@ def _build_review_prompt(user_message, character_bible, plot_outline, meta):
     return compose_prompt("review_report", data, mode=meta.get("mode"))
 
 
-def _build_final_script_prompt(user_message, word_count_wan, character_bible, plot_outline, review_report, meta):
+def _build_final_script_prompt(user_message, word_count, character_bible, plot_outline, review_report, meta):
     data = _build_chat_prompt_data(
         user_message,
-        word_count_wan,
+        word_count,
         meta,
         history=character_bible,
         content=plot_outline,
@@ -1162,11 +1163,11 @@ def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, 
 
     with app.app_context():
         try:
-            word_count_wan = meta.get("word_count_wan", 2)
+            word_count = meta.get("word_count", 2)
             try:
-                word_count_wan = float(word_count_wan)
+                word_count = float(word_count)
             except Exception:
-                word_count_wan = 2
+                word_count = 2
 
             # 1) 人物设定
             stage_being_processed = "character_bible"
@@ -1183,7 +1184,7 @@ def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, 
                 status="running",
             )
             character_bible = _call_api_for_chat(
-                _build_character_prompt(user_message, word_count_wan),
+                _build_character_prompt(user_message, word_count),
                 selected_model=selected_model,
             )
             _save_partial_artifacts(
@@ -1214,7 +1215,7 @@ def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, 
                 status="running",
             )
             plot_outline = _call_api_for_chat(
-                _build_outline_prompt(user_message, word_count_wan, character_bible, meta),
+                _build_outline_prompt(user_message, word_count, character_bible, meta),
                 selected_model=selected_model,
             )
             _save_partial_artifacts(
@@ -1276,7 +1277,7 @@ def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, 
                 status="running",
             )
             final_script = _call_api_for_chat(
-                _build_final_script_prompt(user_message, word_count_wan, character_bible, plot_outline, review_report, meta),
+                _build_final_script_prompt(user_message, word_count, character_bible, plot_outline, review_report, meta),
                 selected_model=selected_model,
             )
             _save_partial_artifacts(
@@ -1380,7 +1381,7 @@ def chat_send():
         if not user_message:
             return jsonify({'success': False, 'message': 'message 不能为空'}), 400
 
-        _build_character_prompt(user_message, word_count_wan, meta)
+        _build_character_prompt(user_message, word_count, meta)
         project_id = data.get('project_id')
         selected_model = _normalize_selected_model(data.get('model') or session.get('selected_model') or API)
 

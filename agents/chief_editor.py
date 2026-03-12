@@ -1,7 +1,7 @@
 import re
 from datetime import datetime, timezone
 
-DEFAULT_WORD_COUNT_WAN = 2.0
+DEFAULT_word_count = 2.0
 
 MAIN_CATEGORY_VOCAB = [
     "现代言情", "古代言情", "都市", "玄幻仙侠", "悬疑",
@@ -30,20 +30,20 @@ FRAMEWORK_HINTS = [
     "框架", "提纲", "骨架", "设定如下", "按照下面结构", "我已经想好了", "章节安排", "结构", "架构"
 ]
 
-def _normalize_word_count_wan(value):
+def _normalize_word_count(value):
     try:
         v = float(value)
         if v <= 0:
-            return DEFAULT_WORD_COUNT_WAN
+            return DEFAULT_word_count
         return v
     except Exception:
-        return DEFAULT_WORD_COUNT_WAN
+        return DEFAULT_word_count
 
 
-def _format_word_count_text(word_count_wan):
-    if word_count_wan <= 0:
-        word_count_wan = DEFAULT_WORD_COUNT_WAN
-    return f"{word_count_wan}万字（短篇默认）"
+def _format_word_count_text(word_count):
+    if word_count <= 0:
+        word_count = DEFAULT_word_count
+    return f"{word_count}万字（短篇默认）"
 
 
 def _dedupe_keep_order(items):
@@ -126,7 +126,7 @@ def analyze_requirements(message, meta):
     msg = (message or "").strip()
     meta = meta or {}
 
-    word_count_wan = _normalize_word_count_wan(meta.get("word_count_wan"))
+    word_count = _normalize_word_count(meta.get("word_count"))
 
     reference_text = (meta.get("reference_text") or "").strip()
     framework_text = (meta.get("framework_text") or "").strip()
@@ -160,7 +160,7 @@ def analyze_requirements(message, meta):
         "framework_text": framework_text if mode == "framework" else "",
         "banned": "、".join(banned_items),
         "output_granularity": _guess_output_granularity(msg),
-        "word_count_wan": word_count_wan
+        "word_count": word_count
     }
 
 
@@ -179,8 +179,8 @@ def build_story_brief(payload, mode):
     return {
         "mode": final_mode,
         "user_message": message,
-        "word_count_wan": analysis["word_count_wan"],
-        "word_count": _format_word_count_text(analysis["word_count_wan"]),
+        "word_count": analysis["word_count"],
+        "word_count": _format_word_count_text(analysis["word_count"]),
 
         "main_categories": analysis["main_categories"],
         "style_tags": analysis["style_tags"],

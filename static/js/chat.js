@@ -1,4 +1,4 @@
-const DEFAULT_WORD_COUNT_WAN = 2;
+const DEFAULT_word_count = 2;
 const POLL_INTERVAL = 2000;
 const SLOW_HINT_AFTER_MS = 18000;
 const VERY_SLOW_HINT_AFTER_MS = 32000;
@@ -393,10 +393,10 @@ async function handleSend() {
     return;
   }
 
-  let wordCountWan = wordCountInput ? parseFloat(wordCountInput.value) : DEFAULT_WORD_COUNT_WAN;
+  let wordCountWan = wordCountInput ? parseFloat(wordCountInput.value) : DEFAULT_word_count;
   if (Number.isNaN(wordCountWan) || wordCountWan <= 0) {
-    wordCountWan = DEFAULT_WORD_COUNT_WAN;
-    if (wordCountInput) wordCountInput.value = DEFAULT_WORD_COUNT_WAN;
+    wordCountWan = DEFAULT_word_count;
+    if (wordCountInput) wordCountInput.value = DEFAULT_word_count;
   }
 
   if (sendBtn) sendBtn.disabled = true;
@@ -438,7 +438,7 @@ async function handleSend() {
       project_id: currentProjectId,
       message: message,
       meta: {
-        word_count_wan: wordCountWan,
+        word_count: wordCountWan,
         genre: genre,
         style: style,
         output_granularity: outputGranularity,

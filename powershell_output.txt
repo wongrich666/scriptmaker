@@ -4382,7 +4382,7 @@ def _normalize_tag_list(value):
     return result
 
 
-def _normalize_word_count_wan(value):
+def _normalize_word_count(value):
     try:
         v = float(value)
         if v <= 0:
