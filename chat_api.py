@@ -151,6 +151,14 @@ def _normalize_chat_meta(meta):
     except Exception:
         word_count_wan = 2.0
 
+    try:
+        raw_episode_count = meta.get("episode_count", 10)
+        episode_count = int(raw_episode_count or 10)
+        if episode_count <= 0:
+            episode_count = 10
+    except Exception:
+        episode_count = 10
+
     return {
         "word_count_wan": word_count_wan,
         "genre": str(meta.get("genre") or "").strip(),
@@ -160,6 +168,7 @@ def _normalize_chat_meta(meta):
         "framework_text": str(meta.get("framework_text") or "").strip(),
         "banned_items": _normalize_banned_items(meta.get("banned") or meta.get("banned_items")),
         "mode": str(meta.get("mode") or "").strip(),
+        "episode_count": episode_count,
     }
 
 

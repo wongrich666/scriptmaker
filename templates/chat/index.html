@@ -74,6 +74,21 @@
               <label for="wordCountInput">字数（万字）</label>
               <input id="wordCountInput" type="number" min="0.5" step="0.5" value="2" />
             </div>
+
+            <div class="field-column">
+              <label for="episodeCountInput">集数</label>
+              <input id="episodeCountInput" type="number" min="1" step="1" value="10">
+            </div>
+
+            <div class="field-column">
+              <label for="granularitySelect">输出粒度</label>
+              <select id="granularitySelect">
+                <option value="outline">outline（总纲）</option>
+                <option value="episode_plan">episode_plan（分集计划）</option>
+                <option value="single_episode_script">single_episode_script（单集正文）</option>
+                <option value="scene_asset_extract">scene_asset_extract（场景资产）</option>
+              </select>
+            </div>
           </div>
         </div>
       </header>

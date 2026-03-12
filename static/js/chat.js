@@ -83,6 +83,7 @@ const modeSelect = document.getElementById("modeSelect");
 const referenceInput = document.getElementById("referenceInput");
 const frameworkInput = document.getElementById("frameworkInput");
 const bannedInput = document.getElementById("bannedInput");
+const episodeCountInput = document.getElementById("episodeCountInput");
 
 document.querySelectorAll(".tab-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -422,6 +423,7 @@ async function handleSend() {
   const banned = bannedInput ? bannedInput.value.trim() : "";
 
   const summaryLines = [`〖字数〗${wordCountWan}万字`];
+  if (episodeCount) summaryLines.push(`〖集数〗${episodeCount}`);
   if (genre) summaryLines.push(`〖题材〗${genre}`);
   if (style) summaryLines.push(`〖风格〗${style}`);
   if (outputGranularity) summaryLines.push(`〖输出粒度〗${outputGranularity}`);
@@ -439,6 +441,7 @@ async function handleSend() {
       message: message,
       meta: {
         word_count_wan: wordCountWan,
+        episode_count: episodeCount,
         genre: genre,
         style: style,
         output_granularity: outputGranularity,
