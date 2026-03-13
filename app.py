@@ -190,7 +190,7 @@ def create_app_with_blueprints():
 
 
 app = create_app_with_blueprints()
-print(app.url_map)
+# print(app.url_map)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=60002, debug=False)
