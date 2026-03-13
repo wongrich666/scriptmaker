@@ -23,8 +23,8 @@ from agents.reviewer import (
     review_plot_outline,
     review_episode_plan,
     review_episode_script,
+    review_five_episode_consistency,
 )
-
 
 def _ctx_call(ctx, name, *args, **kwargs):
     fn = ctx.get(name)
@@ -158,13 +158,69 @@ def run_single_episode_stage(ctx, brief, character_bible, approved_plan):
     _ctx_call(ctx, "update_task_record", ctx["task_id"], generated_episode_count=1)
     return script_text, review
 
+def run_five_episode_consistency_stage(
+    ctx,
+    brief,
+    character_bible,
+    approved_outline,
+    approved_plan,
+    episodes,
+    batch_start,
+    batch_end,
+    previous_batch_review=None,
+):
+    batch_episodes = [
+        ep for ep in episodes
+        if batch_start <= ep.get("episode_no", 0) <= batch_end
+    ]
 
-def run_multi_episode_stage(ctx, brief, character_bible, approved_plan):
+    _trace(
+        ctx,
+        "review_report",
+        f"正在进行第{batch_start}-{batch_end}集连贯性总审",
+        status="running",
+    )
+
+    review = review_five_episode_consistency(
+        brief=brief,
+        character_bible=character_bible,
+        approved_outline=approved_outline,
+        approved_plan=approved_plan,
+        episode_batch=batch_episodes,
+        batch_start=batch_start,
+        batch_end=batch_end,
+        llm_call=ctx["llm_call"],
+        selected_model=ctx["selected_model"],
+        previous_batch_review=previous_batch_review,
+    )
+
+    _ctx_call(
+        ctx,
+        "save_script_artifacts",
+        ctx["project_id"],
+        review_report=review.get("text_report", ""),
+    )
+
+    _trace(
+        ctx,
+        "review_report",
+        f"第{batch_start}-{batch_end}集连贯性总审完成",
+        preview=(review.get("summary") or "")[:180],
+        status="done" if review.get("passed") else "failed",
+    )
+
+    return review
+
+
+def run_multi_episode_stage(ctx, brief, character_bible, approved_outline, approved_plan):
     total = int(brief.get("episode_count") or 10)
     start_no = int(brief.get("current_episode_no") or 1)
+    batch_size = int((ctx.get("meta") or {}).get("consistency_review_every") or 5)
 
     episodes = []
     previous_summary = ""
+    previous_batch_review = None
+    consistency_reviews = []
 
     for episode_no in range(start_no, total + 1):
         current_plan = _extract_episode_block(approved_plan, episode_no) or approved_plan
@@ -225,8 +281,54 @@ def run_multi_episode_stage(ctx, brief, character_bible, approved_plan):
             generated_episode_count=episode_no - start_no + 1,
         )
 
+        generated_count = episode_no - start_no + 1
+        is_batch_boundary = (generated_count % batch_size == 0)
+        is_last_episode = (episode_no == total)
+
+        if is_batch_boundary or is_last_episode:
+            batch_end = episode_no
+            batch_start = max(start_no, batch_end - batch_size + 1)
+
+            consistency_review = run_five_episode_consistency_stage(
+                ctx=ctx,
+                brief=brief,
+                character_bible=character_bible,
+                approved_outline=approved_outline,
+                approved_plan=approved_plan,
+                episodes=episodes,
+                batch_start=batch_start,
+                batch_end=batch_end,
+                previous_batch_review=previous_batch_review,
+            )
+
+            consistency_reviews.append(consistency_review)
+            previous_batch_review = consistency_review.get("text_report", "")
+
+            blocking = (ctx.get("meta") or {}).get("consistency_review_blocking", True)
+            if blocking and not consistency_review.get("passed"):
+                _ctx_call(
+                    ctx,
+                    "update_task_stage",
+                    ctx["task_id"],
+                    "review_report",
+                    status="failed",
+                    message=f"第{batch_start}-{batch_end}集连贯性审核未通过，已停止后续生成。",
+                )
+                return {
+                    "episodes": episodes,
+                    "consistency_reviews": consistency_reviews,
+                    "stopped_early": True,
+                    "stop_reason": f"第{batch_start}-{batch_end}集连贯性审核未通过",
+                }
+
     _ctx_call(ctx, "update_task_stage", ctx["task_id"], "final_script", status="done")
-    return episodes
+
+    return {
+        "episodes": episodes,
+        "consistency_reviews": consistency_reviews,
+        "stopped_early": False,
+        "stop_reason": "",
+    }
 
 
 def run_workflow(ctx):
@@ -272,11 +374,27 @@ def run_workflow(ctx):
         return result
 
     if mode == "multi_episode_script":
-        episodes = run_multi_episode_stage(ctx, brief, chars, episode_plan)
-        final_script = "\n\n".join([x["chapter_script"] for x in episodes if x.get("chapter_script")])
+        batch_result = run_multi_episode_stage(ctx, brief, chars, outline, episode_plan)
+        episodes = batch_result.get("episodes", [])
+        consistency_reviews = batch_result.get("consistency_reviews", [])
+
+        final_script = "\n\n".join(
+            [x["chapter_script"] for x in episodes if x.get("chapter_script")]
+        )
+
         result["episodes"] = episodes
+        result["consistency_reviews"] = consistency_reviews
+        result["stopped_early"] = batch_result.get("stopped_early", False)
+        result["stop_reason"] = batch_result.get("stop_reason", "")
         result["final_script"] = final_script
-        result["review_report"] = "\n\n".join([x["review_report"] for x in episodes if x.get("review_report")])
+
+        if consistency_reviews:
+            result["review_report"] = consistency_reviews[-1].get("text_report", "")
+        else:
+            result["review_report"] = "\n\n".join(
+                [x["review_report"] for x in episodes if x.get("review_report")]
+            )
+
         return result
 
     return result
