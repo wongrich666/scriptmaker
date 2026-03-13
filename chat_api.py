@@ -19,7 +19,7 @@ import re
 import requests
 import time
 import store
-
+from orchestrator.pipeline import run_workflow
 from services.artifact_service import save_script_artifacts, save_episode_artifact
 from requests.adapters import HTTPAdapter
 from requests.exceptions import ChunkedEncodingError, ConnectionError as RequestsConnectionError, RequestException
@@ -1665,174 +1665,82 @@ def _run_multi_episode_script_generation(
 
 
 def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, selected_model):
-    stage_being_processed = "queued"
-
     with app.app_context():
         try:
-            word_count_wan = meta.get("word_count_wan", 2)
-            try:
-                word_count_wan = float(word_count_wan)
-            except Exception:
-                word_count_wan = 2.0
-
-            granularity = meta.get("output_granularity", "outline")
-
-            # 1) 人物设定
-            stage_being_processed = "character_bible"
-            _update_task_stage(
-                task_id,
-                "character_bible",
-                status="running",
-                message="我先帮你把人物关系搭起来，先确定主角、对手和关键配角。",
-            )
-            _append_trace(
-                project_id,
-                "character_bible",
-                "我先帮你把人物关系搭起来，先确定主角、对手和关键配角。",
-                status="running",
-            )
-
-            character_bible = _call_api_for_chat(
-                _build_character_prompt(user_message, word_count_wan, meta),
-                selected_model=selected_model,
-            )
-            _save_partial_artifacts(
-                project_id,
-                user_message=user_message,
-                character_bible=character_bible,
-            )
-            _append_trace(
-                project_id,
-                "character_bible",
-                "人物设定已完成，角色冲突已经建立。",
-                status="done",
-                preview=_safe_preview(character_bible, 180),
-            )
-
-            # 2) 总纲 / 分集计划
-            stage_being_processed = "plot_outline"
-            _update_task_stage(
-                task_id,
-                "plot_outline",
-                status="running",
-                message="现在开始搭剧情骨架，梳理故事主线、阶段推进和关键反转。",
-            )
-            _append_trace(
-                project_id,
-                "plot_outline",
-                "现在开始搭剧情骨架，梳理故事主线、阶段推进和关键反转。",
-                status="running",
-            )
-
-            plot_outline = _call_api_for_chat(
-                _build_outline_prompt(user_message, word_count_wan, character_bible, meta),
-                selected_model=selected_model,
-            )
-            _save_partial_artifacts(
-                project_id,
-                user_message=user_message,
-                plot_outline=plot_outline,
-            )
-            _append_trace(
-                project_id,
-                "plot_outline",
-                "剧情结构已完成。",
-                status="done",
-                preview=_safe_preview(plot_outline, 180),
-            )
-
-            # 3) 审核意见
-            stage_being_processed = "review_report"
-            _update_task_stage(
-                task_id,
-                "review_report",
-                status="running",
-                message="我在检查这个方案的结构、节奏和格式合规性。",
-            )
-            _append_trace(
-                project_id,
-                "review_report",
-                "我在检查这个方案的结构、节奏和格式合规性。",
-                status="running",
-            )
-
-            review_report = _call_api_for_chat(
-                _build_review_prompt(user_message, character_bible, plot_outline, meta),
-                selected_model=selected_model,
-            )
-            _save_partial_artifacts(
-                project_id,
-                user_message=user_message,
-                review_report=review_report,
-            )
-            _append_trace(
-                project_id,
-                "review_report",
-                "审核完成，已经整理出优化方向。",
-                status="done",
-                preview=_safe_preview(review_report, 180),
-            )
-
-            # 4) 按输出粒度决定最终交付物
-            stage_being_processed = "final_script"
-            _update_task_stage(
-                task_id,
-                "final_script",
-                status="running",
-                message="正在整合前面的内容，生成最终交付物。",
-            )
-            _append_trace(
-                project_id,
-                "final_script",
-                "正在整合前面的内容，生成最终交付物。",
-                status="running",
-            )
-
-            if granularity == "multi_episode_script":
-                _run_multi_episode_script_generation(
-                    task_id=task_id,
-                    project_id=project_id,
-                    user_message=user_message,
-                    word_count_wan=word_count_wan,
-                    character_bible=character_bible,
-                    full_episode_plan_text=plot_outline,
-                    review_report=review_report,
-                    meta=meta,
-                    selected_model=selected_model,
-                )
-                return
-
-            if granularity == "single_episode_script":
-                current_episode_no = int(meta.get("current_episode_no") or 1)
-                total_episode_count = _resolve_episode_count(meta, plot_outline)
-                current_episode_no = max(1, min(current_episode_no, total_episode_count))
-                current_episode_plan = _extract_episode_plan_slice(plot_outline, current_episode_no)
-                final_script = _call_api_for_chat(
-                    _build_single_episode_script_prompt(
-                        user_message=user_message,
-                        word_count_wan=word_count_wan,
-                        character_bible=character_bible,
-                        current_episode_plan=current_episode_plan,
-                        current_episode_no=current_episode_no,
-                        meta=meta,
-                    ),
-                    selected_model=selected_model,
+            def trace(stage, message, *, status="done", preview=""):
+                return _append_trace(
+                    project_id,
+                    stage,
+                    message,
+                    status=status,
+                    preview=preview,
                 )
 
-                _save_final_artifacts(
+            def save_partial(**kwargs):
+                return _save_partial_artifacts(
                     project_id,
                     user_message=user_message,
-                    final_script=final_script,
+                    **kwargs,
+                )
+
+            def save_final(**kwargs):
+                return _save_final_artifacts(
+                    project_id,
+                    user_message=user_message,
+                    **kwargs,
+                )
+
+            ctx = {
+                "task_id": task_id,
+                "project_id": project_id,
+                "user_id": user_id,
+                "user_message": user_message,
+                "meta": meta,
+                "selected_model": selected_model,
+                "llm_call": _call_api_for_chat,
+                "append_trace": trace,
+                "update_task_stage": _update_task_stage,
+                "update_task_record": _update_task_record,
+                "save_partial_artifacts": save_partial,
+                "save_final_artifacts": save_final,
+                "safe_preview": _safe_preview,
+            }
+
+            result = run_workflow(ctx)
+
+            workflow_mode = result.get("workflow_mode") or meta.get("output_granularity") or "outline"
+
+            character_bible = result.get("character_bible", "")
+            plot_outline = result.get("plot_outline", "")
+            review_report = result.get("review_report", "")
+            final_review = result.get("final_review", "")
+            final_asset_text = result.get("final_asset_text", "")
+            final_script = result.get("final_script", "")
+
+            # 多集模式下，逐集内容应该已经在 pipeline 里逐集落库；
+            # 这里不要再把 ScriptModel.content 当作每一集实时覆盖目标。
+            if workflow_mode == "multi_episode_script":
+                save_final(
+                    final_script=final_script,   # 这里保留合并全文，便于前端统一查看
                     character_bible=character_bible,
                     plot_outline=plot_outline,
                     review_report=review_report,
                 )
-                _append_trace(
-                    project_id,
-                    "final_script",
-                    "单集剧本已完成。",
+                _update_task_stage(
+                    task_id,
+                    "done",
                     status="done",
-                    preview=_safe_preview(final_script, 180),
+                    message=f"多集剧本已完成，共 {meta.get('episode_count') or 0} 集。",
+                )
+                trace("done", "多集剧本已完成。", status="done")
+                return
+
+            if workflow_mode == "single_episode_script":
+                save_final(
+                    final_script=final_script,
+                    character_bible=character_bible,
+                    plot_outline=plot_outline,
+                    review_report=review_report,
                 )
                 _update_task_stage(
                     task_id,
@@ -1840,35 +1748,15 @@ def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, 
                     status="done",
                     message="单集剧本已完成，你现在可以查看完整内容。",
                 )
-                _append_trace(
-                    project_id,
-                    "done",
-                    "单集剧本已完成，你现在可以查看完整内容。",
-                    status="done",
-                )
+                trace("done", "单集剧本已完成。", status="done")
                 return
 
-            if granularity == "scene_asset_extract":
-                final_assets = _call_api_for_chat(
-                    _build_scene_asset_extract_prompt(user_message, word_count_wan, meta),
-                    selected_model=selected_model,
-                )
-
-                _save_partial_artifacts(
-                    project_id,
-                    user_message=user_message,
-                    final_asset_text=final_assets,
+            if workflow_mode == "scene_asset_extract":
+                save_partial(
+                    final_asset_text=final_asset_text,
                     character_bible=character_bible,
                     plot_outline=plot_outline,
                     review_report=review_report,
-                )
-
-                _append_trace(
-                    project_id,
-                    "final_script",
-                    "场景资产已完成。",
-                    status="done",
-                    preview=_safe_preview(final_assets, 180),
                 )
                 _update_task_stage(
                     task_id,
@@ -1876,42 +1764,16 @@ def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, 
                     status="done",
                     message="场景资产已完成，你现在可以查看完整内容。",
                 )
-                _append_trace(
-                    project_id,
-                    "done",
-                    "场景资产已完成，你现在可以查看完整内容。",
-                    status="done",
-                )
+                trace("done", "场景资产已完成。", status="done")
                 return
 
-            # outline / episode_plan 统一输出“总编剧定稿”
-            final_review = _call_api_for_chat(
-                _build_final_review_prompt(
-                    user_message,
-                    word_count_wan,
-                    character_bible,
-                    plot_outline,
-                    review_report,
-                    meta,
-                ),
-                selected_model=selected_model,
-            )
-
-            _save_final_artifacts(
-                project_id,
-                user_message=user_message,
+            # outline / episode_plan
+            save_final(
                 final_script="",
                 final_review=final_review,
                 character_bible=character_bible,
                 plot_outline=plot_outline,
                 review_report=review_report,
-            )
-            _append_trace(
-                project_id,
-                "final_script",
-                "总编剧定稿已完成。",
-                status="done",
-                preview=_safe_preview(final_review, 180),
             )
             _update_task_stage(
                 task_id,
@@ -1919,12 +1781,7 @@ def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, 
                 status="done",
                 message="总编剧定稿已完成，你现在可以查看完整内容。",
             )
-            _append_trace(
-                project_id,
-                "done",
-                "总编剧定稿已完成，你现在可以查看完整内容。",
-                status="done",
-            )
+            trace("done", "总编剧定稿已完成。", status="done")
             return
 
         except Exception as e:
@@ -1932,14 +1789,14 @@ def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, 
             _update_task_record(
                 task_id,
                 status="failed",
-                current_stage=stage_being_processed,
+                current_stage="failed",
                 current_title="本次生成未完成",
                 current_message=str(e),
                 error=str(e),
             )
             _append_trace(
                 project_id,
-                stage_being_processed,
-                f"这一阶段未能完成：{str(e)}",
+                "failed",
+                f"生成失败：{str(e)}",
                 status="failed",
             )
