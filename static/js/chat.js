@@ -361,7 +361,7 @@ function renderArtifacts(data) {
   } else if (granularity === "outline" || granularity === "episode_plan") {
     finalText = data.final_review || "";
   } else if (granularity === "scene_asset_extract") {
-    finalText = data.final_script || "";
+    finalText = data.final_asset_text || data.final_script || "";
   }
 
   const characterText = data.character_bible || data.character_profile || "";

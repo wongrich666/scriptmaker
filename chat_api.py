@@ -18,6 +18,8 @@ import json
 import re
 import requests
 import time
+
+import store
 from requests.adapters import HTTPAdapter
 from requests.exceptions import ChunkedEncodingError, ConnectionError as RequestsConnectionError, RequestException
 from urllib3.util.retry import Retry
@@ -1025,6 +1027,7 @@ def _set_project_result(
     *,
     final_script=None,
     final_review=None,
+    final_asset_text=None,
     character_bible=None,
     plot_outline=None,
     review_report=None,
@@ -1035,6 +1038,8 @@ def _set_project_result(
             store["final_script"] = final_script
         if final_review is not None:
             store["final_review"] = final_review
+        if final_asset_text is not None:
+            store["final_asset_text"] = final_asset_text
         if character_bible is not None:
             store["character_bible"] = character_bible
         if plot_outline is not None:
@@ -1048,6 +1053,41 @@ def _set_project_result(
 def _get_project_result(project_id):
     with _CHAT_STORE_LOCK:
         return dict(CHAT_RESULT_STORE.get(project_id) or {})
+
+
+def _load_project_meta_payload(script: ScriptModel) -> dict:
+    raw = (script.knowledge or "").strip()
+    if not raw:
+        return {}
+
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            return data
+    except Exception:
+        pass
+
+    # 兼容老数据：旧版 knowledge 可能只是纯文本
+    return {
+        "final_review": raw
+    }
+
+
+def _save_project_meta_payload(
+    script: ScriptModel,
+    *,
+    review_report=None,
+    final_review=None,
+):
+    payload = _load_project_meta_payload(script)
+
+    if review_report is not None:
+        payload["review_report"] = review_report or ""
+
+    if final_review is not None:
+        payload["final_review"] = final_review or ""
+
+    script.knowledge = json.dumps(payload, ensure_ascii=False)
 
 
 def _ensure_project_for_user(project_id, user_id, user_message, meta=None):
@@ -1104,12 +1144,11 @@ def _save_project_artifacts(
     character_bible=None,
     plot_outline=None,
     review_report=None,
-):
-    _save_final_artifacts(
+final_assets=None):
+    _save_partial_artifacts(
         project_id,
         user_message=user_message,
-        final_script=final_script,
-        final_review=final_review,
+        final_asset_text=final_assets,
         character_bible=character_bible,
         plot_outline=plot_outline,
         review_report=review_report,
@@ -1122,6 +1161,7 @@ def _save_partial_artifacts(
     user_message,
     final_script=None,
     final_review=None,
+    final_asset_text=None,
     character_bible=None,
     plot_outline=None,
     review_report=None,
@@ -1144,6 +1184,7 @@ def _save_partial_artifacts(
         project_id,
         final_script=final_script,
         final_review=final_review,
+        final_asset_text=final_asset_text,
         character_bible=character_bible,
         plot_outline=plot_outline,
         review_report=review_report,
@@ -1156,6 +1197,7 @@ def _save_final_artifacts(
     user_message,
     final_script=None,
     final_review=None,
+    final_asset_text=None,
     character_bible=None,
     plot_outline=None,
     review_report=None,
@@ -1179,6 +1221,7 @@ def _save_final_artifacts(
         project_id,
         final_script=final_script,
         final_review=final_review,
+        final_asset_text=final_asset_text,
         character_bible=character_bible,
         plot_outline=plot_outline,
         review_report=review_report,
@@ -1434,24 +1477,25 @@ def get_project_artifacts(project_id):
         return jsonify({'success': False, 'message': '您没有权限访问该项目'}), 403
 
     result = _get_project_result(project_id)
+    meta_payload = _load_project_meta_payload(script)
 
     script_text = (result.get("final_script", "") if result else "") or (script.content or "")
-    final_review = (result.get("final_review", "") if result else "") or (script.knowledge or "")
+    final_review = (result.get("final_review", "") if result else "") or meta_payload.get("final_review", "")
     character_bible = (result.get("character_bible", "") if result else "") or (script.characters or "")
     plot_outline = (result.get("plot_outline", "") if result else "") or (script.outline or "")
-    review_report = (result.get("review_report", "") if result else "")
-    if not review_report:
-        review_report = ""
+    review_report = (result.get("review_report", "") if result else "") or meta_payload.get("review_report", "")
+    final_asset_text = (result.get("final_asset_text", "") if result else "")
 
     return jsonify({
         'success': True,
         'project_id': project_id,
         'script_text': script_text,
         'final_review': final_review,
-        'final_script': script_text,   # 兼容旧前端
+        'final_script': script_text,
         'character_bible': character_bible,
         'plot_outline': plot_outline,
         'review_report': review_report,
+        'final_asset_text': final_asset_text,
     })
 
 
@@ -1792,14 +1836,16 @@ def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, 
                     _build_scene_asset_extract_prompt(user_message, word_count_wan, meta),
                     selected_model=selected_model,
                 )
-                _save_final_artifacts(
+
+                _save_partial_artifacts(
                     project_id,
                     user_message=user_message,
-                    final_script=final_assets,
+                    final_asset_text=final_assets,
                     character_bible=character_bible,
                     plot_outline=plot_outline,
                     review_report=review_report,
                 )
+
                 _append_trace(
                     project_id,
                     "final_script",
