@@ -49,12 +49,18 @@ load_dotenv(override=True)
 API = os.getenv('API')
 OLLAMA_HOST = os.getenv('OLLAMA_HOST')
 OLLAMA_MODEL = os.getenv('OLLAMA_MODEL')
+
 DEEPSEEK_HOST = os.getenv('DEEPSEEK_HOST')
 DEEPSEEK_MODEL = os.getenv('DEEPSEEK_MODEL')
 DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY')
+
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 GEMINI_MODEL = os.getenv('GEMINI_MODEL')
 GEMINI_HOST = os.getenv('GEMINI_HOST')
+
+CLAUDE_HOST = os.getenv('CLAUDE_HOST') or 'https://api.anthropic.com/v1/messages'
+CLAUDE_MODEL = os.getenv('CLAUDE_MODEL')
+CLAUDE_API_KEY = os.getenv('CLAUDE_API_KEY')
 
 ALLOWED_REFERENCE_EXTENSIONS = {"pdf", "txt", "md"}
 MAX_REFERENCE_TEXT_CHARS = 20000
@@ -336,6 +342,28 @@ def _extract_ollama_text(resp_json: dict) -> str:
     return content.strip()
 
 
+def _extract_anthropic_text(resp_json: dict) -> str:
+    if not isinstance(resp_json, dict):
+        raise ValueError("Claude API响应不是有效 JSON 对象")
+
+    content = resp_json.get("content")
+    if not isinstance(content, list) or not content:
+        raise ValueError("Claude API响应格式错误：未找到 content 列表")
+
+    texts = []
+    for item in content:
+        if isinstance(item, dict) and item.get("type") == "text":
+            txt = item.get("text")
+            if txt:
+                texts.append(txt)
+
+    merged = "".join(texts).strip()
+    if not merged:
+        raise ValueError("Claude API返回内容为空")
+
+    return merged
+
+
 def _post_openai_compatible(
         host: str,
         api_key: str,
@@ -403,6 +431,132 @@ def _post_openai_compatible(
                 raise ValueError(f"{request_name} 鉴权失败，请检查 API Key：{detail}")
             if resp.status_code == 402:
                 raise ValueError(f"{request_name} 余额不足：{detail}")
+            if resp.status_code == 429:
+                raise ValueError(f"{request_name} 请求过多或限流：{detail}")
+
+            raise ValueError(f"{request_name} 调用失败，HTTP {resp.status_code}：{detail}")
+
+        except ChunkedEncodingError as e:
+            last_err = e
+            if attempt < 3:
+                time.sleep(attempt)
+                continue
+            raise ValueError(f"{request_name} 响应被中断（ChunkedEncodingError）：{e}")
+
+        except RequestsConnectionError as e:
+            last_err = e
+            if attempt < 3:
+                time.sleep(attempt)
+                continue
+            raise ValueError(f"{request_name} 连接失败：{e}")
+
+        except RequestException as e:
+            last_err = e
+            if attempt < 3:
+                time.sleep(attempt)
+                continue
+            raise ValueError(f"{request_name} 网络请求异常：{e}")
+
+        except Exception as e:
+            last_err = e
+            raise
+
+    raise ValueError(f"{request_name} 调用失败：{last_err}")
+
+
+def _post_anthropic_messages(
+    host: str,
+    api_key: str,
+    model: str,
+    messages: list,
+    *,
+    temperature: float = 0.8,
+    max_tokens: int = 2000,
+    request_name: str = "Claude",
+) -> str:
+    if not host:
+        raise ValueError(f"{request_name} HOST 未配置")
+    if not api_key:
+        raise ValueError(f"{request_name} API_KEY 未配置")
+    if not model:
+        raise ValueError(f"{request_name} MODEL 未配置")
+
+    system_parts = []
+    anthropic_messages = []
+
+    for msg in messages or []:
+        if not isinstance(msg, dict):
+            continue
+        role = (msg.get("role") or "").strip().lower()
+        content = (msg.get("content") or "").strip()
+        if not content:
+            continue
+
+        if role == "system":
+            system_parts.append(content)
+        elif role in {"user", "assistant"}:
+            anthropic_messages.append({
+                "role": role,
+                "content": content,
+            })
+
+    if not anthropic_messages:
+        anthropic_messages = [{
+            "role": "user",
+            "content": "请根据系统指令执行。",
+        }]
+
+    payload = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "messages": anthropic_messages,
+    }
+
+    if system_parts:
+        payload["system"] = "\n\n".join(system_parts)
+
+    headers = {
+        "x-api-key": api_key,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+        "connection": "close",
+    }
+
+    last_err = None
+
+    for attempt in range(1, 4):
+        try:
+            resp = _HTTP_SESSION.post(
+                host,
+                headers=headers,
+                json=payload,
+                timeout=(10, 180),
+            )
+
+            try:
+                data = resp.json()
+            except Exception:
+                data = None
+
+            if resp.status_code == 200:
+                if data is None:
+                    raise ValueError(f"{request_name} 返回200，但不是合法JSON")
+                return _extract_anthropic_text(data)
+
+            detail = ""
+            if isinstance(data, dict):
+                err = data.get("error")
+                if isinstance(err, dict):
+                    detail = err.get("message") or ""
+                detail = detail or data.get("message") or data.get("detail") or ""
+            if not detail:
+                detail = resp.text[:500]
+
+            if resp.status_code == 401:
+                raise ValueError(f"{request_name} 鉴权失败，请检查 API Key：{detail}")
+            if resp.status_code == 403:
+                raise ValueError(f"{request_name} 无权限访问该模型：{detail}")
             if resp.status_code == 429:
                 raise ValueError(f"{request_name} 请求过多或限流：{detail}")
 
@@ -753,6 +907,17 @@ def _call_model(messages, current_api=None, temperature=0.7, max_tokens=8192):
             request_name="Ollama",
         ))
 
+    if current_api == 'claude':
+        return _clean_model_content(_post_anthropic_messages(
+            host=CLAUDE_HOST,
+            api_key=CLAUDE_API_KEY,
+            model=CLAUDE_MODEL,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            request_name="Claude",
+        ))
+
     raise ValueError(f"不支持的模型：{current_api}")
 
 
@@ -792,7 +957,7 @@ CHAT_TASK_STORE = {}
 CHAT_TRACE_STORE = {}
 CHAT_RESULT_STORE = {}
 _CHAT_STORE_LOCK = threading.Lock()
-_ALLOWED_CHAT_MODELS = {'deepseek', 'gemini', 'ollama'}
+_ALLOWED_CHAT_MODELS = {'deepseek', 'gemini', 'ollama','claude'}
 
 STAGE_UI_META = {
     "queued": {
