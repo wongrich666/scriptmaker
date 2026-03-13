@@ -13,16 +13,18 @@ PROMPT_MANIFEST = {
     "characters": "core/character_bible_json.txt",
     "character_bible": "core/character_bible_json.txt",
     "outline": {
-    "outline": "core/story_outline.txt",
-    "episode_plan": "core/episode_plan.txt",
-    "single_episode_script": "core/single_episode_script.txt",
-    "multi_episode_script": "core/episode_plan.txt",
-    # multi_episode_script 是编排模式：
-    # 先路由到 episode_plan 生成完整分集计划，
-    # 再由 chat_api._run_multi_episode_script_generation() 循环调用 single_episode_script
-    "scene_asset_extract": "core/scene_asset_extract.txt",
+        "outline": "core/story_outline.txt",
+        "episode_plan": "core/episode_plan.txt",
+        "single_episode_script": "core/single_episode_script.txt",
+        # 删除 multi_episode_script 这条直接映射
+        "scene_asset_extract": "core/scene_asset_extract.txt",
     },
     "review_report": "core/review_report.txt",
+    "review_report_json": "core/review_report_json.txt",
+    "character_rewrite": "core/character_rewrite.txt",
+    "outline_rewrite": "core/outline_rewrite.txt",
+    "episode_plan_rewrite": "core/episode_plan_rewrite.txt",
+    "single_episode_rewrite": "core/single_episode_rewrite.txt",
     "final_rewrite": "core/final_rewrite.txt",
     "chapter_script": "core/single_episode_script.txt",
     "single_episode_script": "core/single_episode_script.txt",
@@ -89,15 +91,22 @@ def _safe_text(value: Any) -> str:
     return str(value)
 
 
+WORKFLOW_ONLY_GRANULARITIES = {"multi_episode_script"}
+
 def resolve_prompt_path(task_name: str, granularity: Optional[str] = None) -> str:
     task_name = ALIASES.get(task_name, task_name)
     conf = PROMPT_MANIFEST.get(task_name)
-
     if conf is None:
         raise ValueError(f"未注册的 prompt task: {task_name}")
 
     if isinstance(conf, dict):
         granularity = normalize_output_granularity(granularity)
+
+        if granularity in WORKFLOW_ONLY_GRANULARITIES:
+            raise ValueError(
+                f"{granularity} 是 workflow mode，不能直接解析为单个 prompt 文件。"
+            )
+
         rel_path = conf.get(granularity) or conf.get("outline")
     else:
         rel_path = conf

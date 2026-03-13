@@ -108,13 +108,22 @@ def _detect_mode_from_inputs(message, meta):
     return "free_generate"
 
 
-def _guess_output_granularity(user_input: str) -> str:
+def _guess_output_granularity(user_input: str, meta=None) -> str:
     text = (user_input or "").lower()
+    meta = meta or {}
+
+    try:
+        episode_count = int(meta.get("episode_count") or 0)
+    except Exception:
+        episode_count = 0
 
     if any(k in text for k in ["场景资产", "场景表", "道具表", "场景拆解"]):
         return "scene_asset_extract"
 
     if any(k in text for k in ["多集", "连续输出", "整季剧本", "全集剧本", "批量剧本"]):
+        return "multi_episode_script"
+
+    if episode_count > 1:
         return "multi_episode_script"
 
     if any(k in text for k in ["单集", "这一集", "第1集", "第2集", "本集剧本"]):
@@ -124,6 +133,54 @@ def _guess_output_granularity(user_input: str) -> str:
         return "episode_plan"
 
     return "outline"
+
+
+def choose_delivery_mode(analysis: dict) -> str:
+    granularity = (analysis.get("output_granularity") or "").strip().lower()
+    valid = {
+        "outline",
+        "episode_plan",
+        "single_episode_script",
+        "multi_episode_script",
+        "scene_asset_extract",
+    }
+    return granularity if granularity in valid else "outline"
+
+
+def decide_next_action(stage_name: str, review_json: dict) -> str:
+    if not isinstance(review_json, dict):
+        return "rewrite"
+
+    if review_json.get("passed"):
+        return "approve"
+
+    if review_json.get("rewrite_required", True):
+        return "rewrite"
+
+    return "approve"
+
+
+def build_rewrite_instruction(stage_name: str, review_json: dict) -> str:
+    if not isinstance(review_json, dict):
+        return f"请按{stage_name}目标重新生成，修复结构、格式与逻辑问题。"
+
+    summary = (review_json.get("summary") or "").strip()
+    issues = review_json.get("blocking_issues") or []
+    fix_lines = []
+
+    for idx, item in enumerate(issues, 1):
+        if not isinstance(item, dict):
+            continue
+        code = item.get("code", "")
+        msg = item.get("message", "")
+        fix = item.get("fix_direction", "")
+        fix_lines.append(f"{idx}. [{code}] {msg}；修复方向：{fix}")
+
+    joined = "\n".join(fix_lines).strip()
+    if joined:
+        return f"{summary}\n请严格按以下问题逐条返工：\n{joined}"
+
+    return summary or f"请按{stage_name}阶段要求返工，保留正确部分，修复未通过项。"
 
 
 def analyze_requirements(message, meta):
@@ -171,7 +228,11 @@ def analyze_requirements(message, meta):
         "framework_text": framework_text if mode == "framework" else "",
         "banned": "、".join(banned_items),
         "output_granularity": _guess_output_granularity(msg),
-        "word_count_wan": word_count_wan
+        "word_count_wan": word_count_wan,
+        "episode_count": int(meta.get("episode_count") or 10),
+        "current_episode_no": int(meta.get("current_episode_no") or 1),
+        "review_strictness": (meta.get("review_strictness") or "strict").strip().lower(),
+        "banned_items": banned_items
     }
 
 
@@ -213,5 +274,9 @@ def build_story_brief(payload, mode):
             "core_conflict": analysis["core_conflict"]
         },
 
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "episode_count": analysis["episode_count"],
+        "current_episode_no": analysis["current_episode_no"],
+        "review_strictness": analysis["review_strictness"],
+        "banned_items": analysis["banned_items"]
     }

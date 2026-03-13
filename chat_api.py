@@ -18,8 +18,9 @@ import json
 import re
 import requests
 import time
-
 import store
+
+from services.artifact_service import save_script_artifacts, save_episode_artifact
 from requests.adapters import HTTPAdapter
 from requests.exceptions import ChunkedEncodingError, ConnectionError as RequestsConnectionError, RequestException
 from urllib3.util.retry import Retry
@@ -768,17 +769,28 @@ def call_api(prompt):
     )
     return _call_model(messages, current_api, temperature=0.7, max_tokens=8192)
 
-def _call_api_for_chat(prompt, selected_model=None):
+
+def _call_api_for_chat(
+    prompt,
+    selected_model=None,
+    *,
+    system_prompt=None,
+    temperature=0.7,
+    max_tokens=8192,
+):
     """
-    专门给 Chat 流程使用的 LLM 调用函数。
-    注意：不能直接调用你原来的 call_api()，因为它依赖 request/session，
-    而这里的任务可能在后台线程里执行。
+    后台任务线程安全 LLM 调用。
     """
     messages = _build_messages(
-        "你是一个专业的剧本创作智能体，擅长总编剧拆解、人物塑造、剧情大纲设计与商业化短剧审核。",
-        prompt
+        system_prompt or "你是一个专业的剧本创作智能体，擅长总编剧拆解、人物塑造、剧情大纲设计与商业化短剧审核。",
+        prompt,
     )
-    return _call_model(messages, selected_model or API, temperature=0.7, max_tokens=8192)
+    return _call_model(
+        messages,
+        selected_model or API,
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )
 
 CHAT_TASK_STORE = {}
 CHAT_TRACE_STORE = {}
