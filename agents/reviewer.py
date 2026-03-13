@@ -59,7 +59,10 @@ def render_text_review(review_json: dict) -> str:
 def review_character_bible(brief, draft, llm_call, selected_model):
     prompt = _build_review_prompt("character_bible", brief, draft)
     llm_review = safe_json_call(prompt, selected_model, "reviewer", llm_call=llm_call)
-    rule_review = audit_character_names(draft, brief.get("review_strictness", "strict"))
+    rule_review = audit_character_names(
+        draft,
+        strictness=brief.get("review_strictness", "strict"),
+    )
     merged = merge_rule_issues(llm_review, rule_review)
     merged["text_report"] = render_text_review(merged)
     return merged

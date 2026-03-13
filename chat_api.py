@@ -183,6 +183,7 @@ def _normalize_chat_meta(meta):
         "mode": str(meta.get("mode") or "").strip(),
         "episode_count": episode_count,
         "current_episode_no": current_episode_no,
+        "allow_forbidden_names": bool(meta.get("allow_forbidden_names", False)),
     }
 
 

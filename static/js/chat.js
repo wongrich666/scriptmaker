@@ -535,6 +535,7 @@ async function handleSend() {
         banned: banned,
         banned_items: banned,
         current_episode: currentEpisodeNo
+        allow_forbidden_names: true
       }
     };
 

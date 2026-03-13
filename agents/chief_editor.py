@@ -232,7 +232,8 @@ def analyze_requirements(message, meta):
         "episode_count": int(meta.get("episode_count") or 10),
         "current_episode_no": int(meta.get("current_episode_no") or 1),
         "review_strictness": (meta.get("review_strictness") or "strict").strip().lower(),
-        "banned_items": banned_items
+        "banned_items": banned_items,
+        "allow_forbidden_names": bool(meta.get("allow_forbidden_names", False)),
     }
 
 
@@ -278,5 +279,6 @@ def build_story_brief(payload, mode):
         "episode_count": analysis["episode_count"],
         "current_episode_no": analysis["current_episode_no"],
         "review_strictness": analysis["review_strictness"],
-        "banned_items": analysis["banned_items"]
+        "banned_items": analysis["banned_items"],
+        "allow_forbidden_names": analysis["allow_forbidden_names"],
     }

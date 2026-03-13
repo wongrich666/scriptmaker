@@ -48,7 +48,11 @@ def _coerce_to_rows(character_data: Any) -> List[Dict[str, Any]]:
     return rows
 
 
-def audit_character_names(character_data: Any, strictness: str = "strict") -> Dict[str, Any]:
+def audit_character_names(
+    character_data: Any,
+    strictness: str = "strict",
+    allow_forbidden_names: bool = False,
+) -> Dict[str, Any]:
     rows = _coerce_to_rows(character_data)
     seen = {}
     blocking_issues = []
@@ -62,11 +66,18 @@ def audit_character_names(character_data: Any, strictness: str = "strict") -> Di
         seen[name] = seen.get(name, 0) + 1
 
         if name in FORBIDDEN_FULL_NAMES:
-            blocking_issues.append({
-                "code": "NAME_BLACKLIST_HIT",
-                "message": f"角色名命中黑名单：{name}",
-                "fix_direction": "请更换为更生活化、非模板化姓名",
-            })
+            if allow_forbidden_names:
+                warnings.append({
+                    "code": "NAME_BLACKLIST_OVERRIDE",
+                    "message": f"角色名命中黑名单，但当前项目允许用户显式指定豁免：{name}",
+                    "fix_direction": "确认该名字确为用户有意使用的梗或反讽，不要误改。",
+                })
+            else:
+                blocking_issues.append({
+                    "code": "NAME_BLACKLIST_HIT",
+                    "message": f"角色名命中黑名单：{name}",
+                    "fix_direction": "请更换为更生活化、非模板化姓名",
+                })
 
         hit_tokens = [tok for tok in RISKY_TOKENS if tok in name]
         if hit_tokens:
