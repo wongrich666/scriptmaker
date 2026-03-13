@@ -1283,12 +1283,6 @@ def _extract_episode_plan_slice(full_plan_text, episode_no):
     return ""
 
 
-def _calc_episode_target_words(meta):
-    total_words = max(1000, int(float(meta.get("word_count_wan", 2.0)) * 10000))
-    episode_count = max(1, int(meta.get("episode_count", 10)))
-    return max(700, round(total_words / episode_count))
-
-
 def _get_episode_output_dir(project_id):
     base_dir = os.path.join(
         current_app.instance_path,
@@ -1446,6 +1440,8 @@ def get_project_artifacts(project_id):
     character_bible = (result.get("character_bible", "") if result else "") or (script.characters or "")
     plot_outline = (result.get("plot_outline", "") if result else "") or (script.outline or "")
     review_report = (result.get("review_report", "") if result else "")
+    if not review_report:
+        review_report = ""
 
     return jsonify({
         'success': True,
@@ -1747,6 +1743,8 @@ def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, 
 
             if granularity == "single_episode_script":
                 current_episode_no = int(meta.get("current_episode_no") or 1)
+                total_episode_count = _resolve_episode_count(meta, plot_outline)
+                current_episode_no = max(1, min(current_episode_no, total_episode_count))
                 current_episode_plan = _extract_episode_plan_slice(plot_outline, current_episode_no)
                 final_script = _call_api_for_chat(
                     _build_single_episode_script_prompt(
