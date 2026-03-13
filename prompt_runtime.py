@@ -13,13 +13,10 @@ PROMPT_MANIFEST = {
     "characters": "core/character_bible_json.txt",
     "character_bible": "core/character_bible_json.txt",
 
-    "outline": {
-        "outline": "core/story_outline.txt",
-        "single_episode_script": "core/single_episode_script.txt",
-        "scene_asset_extract": "core/scene_asset_extract.txt",
-    },
-
+    "outline": "core/story_outline.txt",
     "episode_plan": "core/episode_plan.txt",
+    "single_episode_script": "core/single_episode_script.txt",
+    "scene_asset_extract": "core/scene_asset_extract.txt",
 
     "review_report": "core/review_report.txt",
     "review_report_json": "core/review_report_json.txt",
@@ -29,8 +26,6 @@ PROMPT_MANIFEST = {
     "single_episode_rewrite": "core/single_episode_rewrite.txt",
     "final_rewrite": "core/final_rewrite.txt",
     "chapter_script": "core/single_episode_script.txt",
-    "single_episode_script": "core/single_episode_script.txt",
-    "scene_asset_extract": "core/scene_asset_extract.txt",
 }
 
 LEGACY_FALLBACK = {

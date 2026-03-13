@@ -13,15 +13,18 @@ def _base_data(brief, character_bible, **kwargs):
         "banned_items": brief.get("banned_items", []),
         "reference_text": brief.get("reference_text", ""),
         "framework_text": brief.get("framework_text", ""),
-        "output_granularity": "episode_plan",
     }
-    prompt = compose_prompt("episode_plan", data, mode=brief.get("mode"))
+    data.update(kwargs)
     return data
 
 
 def generate_plot_outline(brief, character_bible, llm_call, selected_model):
-    data = _base_data(brief, character_bible)
-    prompt = compose_prompt("outline", data, mode=brief.get("mode"), granularity="outline")
+    data = _base_data(
+        brief,
+        character_bible,
+        output_granularity="outline",
+    )
+    prompt = compose_prompt("outline", data, mode=brief.get("mode"))
     return call_agent(prompt, selected_model, "writer_b", llm_call=llm_call, temperature=0.7, max_tokens=4096)
 
 
@@ -38,9 +41,21 @@ def rewrite_plot_outline(brief, character_bible, previous_draft, review_json, ll
 
 
 def generate_episode_plan(brief, character_bible, approved_outline, llm_call, selected_model):
-    data = _base_data(brief, character_bible, approved_outline=approved_outline)
-    prompt = compose_prompt("outline", data, mode=brief.get("mode"), granularity="episode_plan")
-    return call_agent(prompt, selected_model, "writer_b", llm_call=llm_call, temperature=0.7, max_tokens=4096)
+    data = _base_data(
+        brief,
+        character_bible,
+        approved_outline=approved_outline,
+        output_granularity="episode_plan",
+    )
+    prompt = compose_prompt("episode_plan", data, mode=brief.get("mode"))
+    return call_agent(
+        prompt,
+        selected_model,
+        "writer_b",
+        llm_call=llm_call,
+        temperature=0.7,
+        max_tokens=4096,
+    )
 
 
 def rewrite_episode_plan(brief, character_bible, approved_outline, previous_draft, review_json, llm_call, selected_model):
@@ -73,6 +88,7 @@ def generate_episode_script(
         current_episode_no=episode_no,
         current_episode_plan=current_episode_plan,
         previous_episode_summary=previous_episode_summary or "",
+        output_granularity="single_episode_script",
     )
     prompt = compose_prompt("single_episode_script", data, mode=brief.get("mode"))
     return call_agent(prompt, selected_model, "writer_b", llm_call=llm_call, temperature=0.75, max_tokens=8192)
