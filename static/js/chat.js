@@ -103,13 +103,14 @@ function getStageOrder() {
 function getFinalTabLabel(granularity) {
   switch (granularity) {
     case "outline":
-      return "最终总纲";
     case "episode_plan":
-      return "最终分集稿";
+      return "总编剧定稿";
     case "multi_episode_script":
       return "多集剧本";
     case "scene_asset_extract":
       return "场景资产";
+    case "single_episode_script":
+      return "单集剧本";
     default:
       return "最终稿";
   }
@@ -125,6 +126,8 @@ function getFinalPlaceholder(granularity) {
       return "暂无单集剧本";
     case "scene_asset_extract":
       return "暂无场景资产";
+    case "multi_episode_script":
+      return "暂无多集剧本";
     default:
       return "暂无最终稿";
   }
@@ -351,27 +354,19 @@ function syncNewTraceMessages(trace) {
 function renderArtifacts(data) {
   const granularity = getCurrentGranularity();
 
-  const finalText =
-    data.final_script ||
-    data.final_artifact ||
-    data.final_output ||
-    "";
+  let finalText = "";
 
-  const characterText =
-    data.character_bible ||
-    data.character_profile ||
-    "";
+  if (granularity === "multi_episode_script" || granularity === "single_episode_script") {
+    finalText = data.script_text || data.final_script || "";
+  } else if (granularity === "outline" || granularity === "episode_plan") {
+    finalText = data.final_review || "";
+  } else if (granularity === "scene_asset_extract") {
+    finalText = data.final_script || "";
+  }
 
-  const outlineText =
-    data.plot_outline ||
-    data.episode_plan ||
-    data.outline ||
-    "";
-
-  const reviewText =
-    data.review_report ||
-    data.review ||
-    "";
+  const characterText = data.character_bible || data.character_profile || "";
+  const outlineText = data.plot_outline || data.episode_plan || data.outline || "";
+  const reviewText = data.review_report || data.review || "";
 
   if (finalScriptBox) finalScriptBox.textContent = finalText || getFinalPlaceholder(granularity);
   if (characterBox) characterBox.textContent = characterText || "暂无人物设定";

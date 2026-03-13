@@ -166,9 +166,6 @@ def build_structured_input_block(data: Dict[str, Any]) -> str:
         ("uncertainty_notes", "不确定项"),
         ("previous_state", "上一集状态"),
         ("current_episode_plan", "当前集计划"),
-        ("episode_target_words", "单集目标字数"),
-        ("current_episode_no", "当前生成集数"),
-        ("generated_episode_count", "已生成集数"),
     ]
 
     lines = ["# Structured Input"]
@@ -176,10 +173,9 @@ def build_structured_input_block(data: Dict[str, Any]) -> str:
         value = data.get(key)
         if value in (None, "", [], {}):
             continue
-        lines.append(f"")
+        lines.append("")
+        lines.append(f"## {label}")
         lines.append(_safe_text(value))
-        lines.append(f"")
-
     return "\n".join(lines).strip()
 
 
