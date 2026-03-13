@@ -163,12 +163,30 @@ def review_five_episode_consistency(
         mode=brief.get("mode"),
     )
 
-    llm_review = safe_json_call(
-        prompt,
-        selected_model,
-        "reviewer",
-        llm_call=llm_call,
-    )
+    try:
+        llm_review = safe_json_call(
+            prompt,
+            selected_model,
+            "reviewer",
+            llm_call=llm_call,
+        )
+    except Exception as e:
+        llm_review = {
+            "passed": False,
+            "rewrite_required": True,
+            "score": 0,
+            "stage": "five_episode_consistency_review",
+            "summary": f"五集连贯性总审返回了非法 JSON：{e}",
+            "blocking_issues": [
+                {
+                    "code": "INVALID_REVIEW_JSON",
+                    "message": "审核模型没有返回合法 JSON。",
+                    "fix_direction": "请重试本批次总审，或缩短批次输入长度。"
+                }
+            ],
+            "non_blocking_issues": [],
+            "rewrite_instruction": "请重新执行该批次总审。"
+        }
 
     # 五集总审先不叠加名字/单集格式/钩子密度等单集规则，
     # 避免误伤；这里只保留 LLM 总审结果即可。

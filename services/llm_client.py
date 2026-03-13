@@ -1,4 +1,3 @@
-# services/llm_client.py
 import json
 import re
 from typing import Any, Callable, Dict
@@ -38,6 +37,7 @@ def call_agent(
 
 def _extract_json_block(text: str) -> str:
     text = (text or "").strip()
+
     fence_match = re.search(r"```(?:json)?\s*(\{.*?\}|\[.*?\])\s*```", text, flags=re.S)
     if fence_match:
         return fence_match.group(1).strip()
@@ -51,7 +51,6 @@ def _extract_json_block(text: str) -> str:
     start = min(starts)
     candidate = text[start:].strip()
 
-    # 尝试裁剪到最后一个 } 或 ]
     end_obj = candidate.rfind("}")
     end_arr = candidate.rfind("]")
     end = max(end_obj, end_arr)
@@ -61,15 +60,71 @@ def _extract_json_block(text: str) -> str:
     return candidate.strip()
 
 
+def _escape_invalid_control_chars_in_strings(s: str) -> str:
+    """
+    只在 JSON 字符串内部，把非法控制字符转义掉：
+    - \n -> \\n
+    - \r -> \\r
+    - \t -> \\t
+    以及其他 <0x20 的控制字符
+    """
+    out = []
+    in_string = False
+    escape = False
+
+    for ch in s:
+        if in_string:
+            if escape:
+                out.append(ch)
+                escape = False
+                continue
+
+            if ch == "\\":
+                out.append(ch)
+                escape = True
+                continue
+
+            if ch == '"':
+                out.append(ch)
+                in_string = False
+                continue
+
+            code = ord(ch)
+            if ch == "\n":
+                out.append("\\n")
+            elif ch == "\r":
+                out.append("\\r")
+            elif ch == "\t":
+                out.append("\\t")
+            elif code < 0x20:
+                out.append(f"\\u{code:04x}")
+            else:
+                out.append(ch)
+        else:
+            out.append(ch)
+            if ch == '"':
+                in_string = True
+
+    return "".join(out)
+
+
+def _try_load_json_with_repair(raw_json: str):
+    try:
+        return json.loads(raw_json)
+    except json.JSONDecodeError:
+        repaired = _escape_invalid_control_chars_in_strings(raw_json)
+        return json.loads(repaired)
+
+
 def safe_json_call(
     prompt: str,
     selected_model: str,
     role: str,
     *,
-    llm_call: Callable[..., str],
+    llm_call,
     temperature: float = 0.2,
     max_tokens: int = 4096,
-) -> Dict[str, Any]:
+):
     raw = call_agent(
         prompt,
         selected_model,
@@ -78,8 +133,11 @@ def safe_json_call(
         temperature=temperature,
         max_tokens=max_tokens,
     )
+
     raw_json = _extract_json_block(raw)
-    data = json.loads(raw_json)
+    data = _try_load_json_with_repair(raw_json)
+
     if not isinstance(data, dict):
         raise ValueError("审核结果必须是 JSON 对象")
+
     return data
