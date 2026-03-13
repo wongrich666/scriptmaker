@@ -115,7 +115,7 @@ def run_episode_plan_stage(ctx, brief, character_bible, approved_outline):
         rewrite_fn=lambda draft, review_json: rewrite_episode_plan(brief, character_bible, approved_outline, draft, review_json, ctx["llm_call"], ctx["selected_model"]),
         max_rounds=3,
     )
-    _ctx_call(ctx, "save_script_artifacts", ctx["project_id"], episode_plan=episode_plan)
+    _ctx_call(ctx, "save_script_artifacts", ctx["project_id"], episode_plan=None)
     return episode_plan, review
 
 

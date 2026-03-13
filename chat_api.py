@@ -1085,7 +1085,7 @@ def _load_project_meta_payload(script: ScriptModel) -> dict:
 
 
 def _save_project_meta_payload(script: ScriptModel, *, review_report=None, final_review=None,
-                               episode_plan=episode_plan):
+                               episode_plan=None):
     payload = _load_project_meta_payload(script)
 
     if review_report is not None:
@@ -1190,7 +1190,7 @@ def _save_partial_artifacts(
                 script,
                 review_report=review_report,
                 final_review=final_review,
-                episode_plan=episode_plan,
+                episode_plan=None,
             )
         db.session.commit()
 
@@ -1201,7 +1201,7 @@ def _save_partial_artifacts(
         final_asset_text=final_asset_text,
         character_bible=character_bible,
         plot_outline=plot_outline,
-        episode_plan=episode_plan,
+        episode_plan=None,
         review_report=review_report,
     )
 
