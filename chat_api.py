@@ -20,18 +20,12 @@ import requests
 import time
 import store
 from orchestrator.pipeline import run_workflow
-from services.artifact_service import save_script_artifacts, save_episode_artifact
 from requests.adapters import HTTPAdapter
 from requests.exceptions import ChunkedEncodingError, ConnectionError as RequestsConnectionError, RequestException
 from urllib3.util.retry import Retry
 from datetime import datetime, timezone
 from flask import current_app
-from prompt_runtime import (
-    compose_prompt,
-    extract_json_from_text,
-    resolve_prompt_path,
-    normalize_output_granularity,
-)
+from prompt_runtime import compose_prompt, normalize_output_granularity
 from urllib.parse import urlparse
 from models import CharacterModel, ChapterModel, ScriptModel, db
 from flask import Blueprint, request, jsonify, session
@@ -1257,10 +1251,17 @@ def _build_character_prompt(user_message, word_count_wan, meta):
 
 def _build_outline_prompt(user_message, word_count_wan, character_bible, meta):
     prompt_key = "episode_plan" if meta.get("output_granularity") in {"episode_plan", "multi_episode_script"} else "outline"
+
+    prompt_meta = dict(meta or {})
+    if prompt_key == "episode_plan":
+        prompt_meta["output_granularity"] = "episode_plan"
+    else:
+        prompt_meta["output_granularity"] = "outline"
+
     data = _build_chat_prompt_data(
         user_message,
         word_count_wan,
-        meta,
+        prompt_meta,
         history=character_bible,
         source_text=user_message,
     )

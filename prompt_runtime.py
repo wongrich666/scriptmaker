@@ -12,13 +12,15 @@ PROMPT_MANIFEST = {
     "source_asset_extract": "core/source_asset_extract.txt",
     "characters": "core/character_bible_json.txt",
     "character_bible": "core/character_bible_json.txt",
+
     "outline": {
         "outline": "core/story_outline.txt",
-        "episode_plan": "core/episode_plan.txt",
         "single_episode_script": "core/single_episode_script.txt",
-        # 删除 multi_episode_script 这条直接映射
         "scene_asset_extract": "core/scene_asset_extract.txt",
     },
+
+    "episode_plan": "core/episode_plan.txt",
+
     "review_report": "core/review_report.txt",
     "review_report_json": "core/review_report_json.txt",
     "character_rewrite": "core/character_rewrite.txt",
@@ -50,7 +52,6 @@ ALIASES = {
     "character": "character_bible",
     "character_bible_json": "characters",
     "story_outline": "outline",
-    "episode_plan": "outline",
     "review": "review_report",
     "final": "final_rewrite",
     "single_episode": "chapter_script",

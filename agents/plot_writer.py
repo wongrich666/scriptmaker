@@ -13,8 +13,9 @@ def _base_data(brief, character_bible, **kwargs):
         "banned_items": brief.get("banned_items", []),
         "reference_text": brief.get("reference_text", ""),
         "framework_text": brief.get("framework_text", ""),
+        "output_granularity": "episode_plan",
     }
-    data.update(kwargs)
+    prompt = compose_prompt("episode_plan", data, mode=brief.get("mode"))
     return data
 
 
