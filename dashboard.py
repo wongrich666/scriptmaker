@@ -6,6 +6,7 @@ from models import ChapterModel, CharacterModel
 from datetime import datetime, timedelta
 import logging
 import re
+from pathlib import Path
 from flask import current_app
 import urllib.parse
 
@@ -172,6 +173,34 @@ def export_story_txt(script_id):
     response.headers["X-Content-Type-Options"] = "nosniff"
     return response
 
+
+
+def _episode_export_dir(script_id: int) -> Path:
+    return Path(current_app.instance_path) / "chat_episode_exports" / f"project_{script_id}"
+
+def _load_episode_scripts(script_id: int) -> list[str]:
+    export_dir = _episode_export_dir(script_id)
+    if not export_dir.exists():
+        return []
+
+    files = sorted(export_dir.glob("Episode-*.txt"))
+    texts = []
+    for fp in files:
+        text = fp.read_text(encoding="utf-8").strip()
+        if text:
+            texts.append(text)
+    return texts
+
+def _looks_like_screenplay(text: str) -> bool:
+    t = (text or "").strip()
+    if not t:
+        return False
+    return (
+        re.search(r"^第\s*\d+\s*集[:：]", t, re.MULTILINE) is not None
+        or "场景：" in t
+        or "△ " in t
+    )
+
 @dashboard.route('/script/<int:script_id>/export_script_txt', methods=['GET'])
 @login_required
 def export_script_txt(script_id):
@@ -181,36 +210,17 @@ def export_script_txt(script_id):
         flash('您没有权限导出此剧本')
         return redirect(url_for('dashboard.index'))
 
-    parts = [f"《{script.title}》剧本", ""]
+    episode_texts = _load_episode_scripts(script_id)
 
-    if script.content:
-        parts.extend([
-            "【最终剧本】",
-            script.content.strip(),
-            ""
-        ])
+    if episode_texts:
+        body = "\n\n".join(episode_texts).strip()
+    elif _looks_like_screenplay(script.content or ""):
+        body = (script.content or "").strip()
     else:
-        # 兜底：没有最终稿时，尽量导出已有结果
-        if script.characters:
-            parts.extend([
-                "【人物设定】",
-                script.characters.strip(),
-                ""
-            ])
-        if script.outline:
-            parts.extend([
-                "【剧情大纲】",
-                script.outline.strip(),
-                ""
-            ])
-        if script.knowledge:
-            parts.extend([
-                "【审核意见】",
-                script.knowledge.strip(),
-                ""
-            ])
+        flash('当前项目还没有可导出的正文剧本')
+        return redirect(url_for('dashboard.index'))
 
-    content = "\n".join(parts).strip() + "\n"
+    content = f"《{script.title}》剧本\n\n{body}\n"
 
     safe_filename = urllib.parse.quote(f"{script.title}_剧本.txt")
     headers = {

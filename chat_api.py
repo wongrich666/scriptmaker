@@ -1016,7 +1016,7 @@ def _append_trace(project_id, stage, message="", *, status="running", preview=""
     return item
 
 
-def _set_project_result(project_id, *, final_script=None, character_bible=None, plot_outline=None, review_report=None):
+def _set_project_result(project_id, *, final_script=None, final_review=None, character_bible=None, plot_outline=None, review_report=None):
     with _CHAT_STORE_LOCK:
         existing = CHAT_RESULT_STORE.get(project_id) or {}
         merged = {
@@ -1089,7 +1089,7 @@ def _ensure_project_for_user(project_id, user_id, user_message, meta=None):
     return script
 
 
-def _save_project_artifacts(project_id, *, user_message, final_script, character_bible, plot_outline, review_report):
+def _save_project_artifacts(project_id, *, user_message, final_script, character_bible, plot_outline, review_report, final_revirew=None):
     script = ScriptModel.query.get(project_id)
     if not script:
         raise ValueError(f"项目不存在：{project_id}")
@@ -1191,7 +1191,7 @@ def _build_review_prompt(user_message, character_bible, plot_outline, meta):
     return compose_prompt("review_report", data, mode=meta.get("mode"))
 
 
-def _build_final_script_prompt(user_message, word_count_wan, character_bible, plot_outline, review_report, meta):
+def _build_final_review_script_prompt(user_message, word_count_wan, character_bible, plot_outline, review_report, meta):
     data = _build_chat_prompt_data(
         user_message,
         word_count_wan,
@@ -1861,6 +1861,7 @@ def _run_multi_episode_script_generation(
     word_count_wan,
     character_bible,
     full_episode_plan_text,
+    review_report,
     meta,
     selected_model,
 ):
@@ -1922,7 +1923,7 @@ def _run_multi_episode_script_generation(
             final_script=combined_text,
             character_bible=character_bible,
             plot_outline=full_episode_plan_text,
-            review_report="",
+            review_report=review_report,
         )
 
         _append_trace(
@@ -1945,44 +1946,44 @@ def _run_multi_episode_script_generation(
             episode_count=total,
         )
 
-    final_script = _merge_episode_scripts(episode_texts)
+        final_script = _merge_episode_scripts(episode_texts)
 
-    _save_project_artifacts(
-        project_id,
-        user_message=user_message,
-        final_script=final_script,
-        character_bible=character_bible,
-        plot_outline=full_episode_plan_text,
-        review_report="",
-    )
+        _save_project_artifacts(
+            project_id,
+            user_message=user_message,
+            final_script=final_script,
+            character_bible=character_bible,
+            plot_outline=full_episode_plan_text,
+            review_report=review_report,
+        )
 
-    final_combined_path = os.path.join(
-        _get_episode_output_dir(project_id),
-        "All-Episodes.txt",
-    )
-    with open(final_combined_path, "w", encoding="utf-8") as f:
-        f.write(final_script)
+        final_combined_path = os.path.join(
+            _get_episode_output_dir(project_id),
+            "All-Episodes.txt",
+        )
+        with open(final_combined_path, "w", encoding="utf-8") as f:
+            f.write(final_script)
 
-    _append_trace(
-        project_id,
-        "done",
-        f"多集剧本已完成，合并文件已保存：{os.path.basename(final_combined_path)}",
-        status="done",
-    )
+        _append_trace(
+            project_id,
+            "done",
+            f"多集剧本已完成，合并文件已保存：{os.path.basename(final_combined_path)}",
+            status="done",
+        )
 
-    _update_task_record(
-        task_id,
-        status="done",
-        current_stage="done",
-        current_title="多集剧本已完成",
-        current_message=f"已连续生成完成，共 {total} 集",
-        progress=100,
-        current_episode_no=total,
-        generated_episode_count=total,
-        episode_count=total,
-    )
+        _update_task_record(
+            task_id,
+            status="done",
+            current_stage="done",
+            current_title="多集剧本已完成",
+            current_message=f"已连续生成完成，共 {total} 集",
+            progress=100,
+            current_episode_no=total,
+            generated_episode_count=total,
+            episode_count=total,
+        )
 
-    return final_script
+        return final_script
 
 
 def _calc_episode_target_words(meta):
