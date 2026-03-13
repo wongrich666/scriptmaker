@@ -1141,14 +1141,17 @@ def _save_project_artifacts(
     user_message,
     final_script=None,
     final_review=None,
+    final_asset_text=None,
     character_bible=None,
     plot_outline=None,
     review_report=None,
-final_assets=None):
-    _save_partial_artifacts(
+):
+    _save_final_artifacts(
         project_id,
         user_message=user_message,
-        final_asset_text=final_assets,
+        final_script=final_script,
+        final_review=final_review,
+        final_asset_text=final_asset_text,
         character_bible=character_bible,
         plot_outline=plot_outline,
         review_report=review_report,
@@ -1174,10 +1177,12 @@ def _save_partial_artifacts(
             script.characters = character_bible or ""
         if plot_outline is not None:
             script.outline = plot_outline or ""
-        if final_review is not None:
-            script.knowledge = final_review or ""
-        elif review_report is not None:
-            script.knowledge = review_report or ""
+        if final_review is not None or review_report is not None:
+            _save_project_meta_payload(
+                script,
+                review_report=review_report,
+                final_review=final_review,
+            )
         db.session.commit()
 
     _set_project_result(

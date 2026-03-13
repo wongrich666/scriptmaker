@@ -17,6 +17,9 @@ PROMPT_MANIFEST = {
     "episode_plan": "core/episode_plan.txt",
     "single_episode_script": "core/single_episode_script.txt",
     "multi_episode_script": "core/episode_plan.txt",
+    # multi_episode_script 是编排模式：
+    # 先路由到 episode_plan 生成完整分集计划，
+    # 再由 chat_api._run_multi_episode_script_generation() 循环调用 single_episode_script
     "scene_asset_extract": "core/scene_asset_extract.txt",
     },
     "review_report": "core/review_report.txt",

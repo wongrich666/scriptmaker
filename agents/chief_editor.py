@@ -108,10 +108,21 @@ def _detect_mode_from_inputs(message, meta):
     return "free_generate"
 
 
-def _guess_output_granularity(message):
-    msg = (message or "").strip()
-    if any(k in msg for k in ["完整剧本", "正文", "完整小说", "详细正文"]):
-        return "script"
+def _guess_output_granularity(user_input: str) -> str:
+    text = (user_input or "").lower()
+
+    if any(k in text for k in ["场景资产", "场景表", "道具表", "场景拆解"]):
+        return "scene_asset_extract"
+
+    if any(k in text for k in ["多集", "连续输出", "整季剧本", "全集剧本", "批量剧本"]):
+        return "multi_episode_script"
+
+    if any(k in text for k in ["单集", "这一集", "第1集", "第2集", "本集剧本"]):
+        return "single_episode_script"
+
+    if any(k in text for k in ["分集计划", "逐集计划", "10集计划", "集纲"]):
+        return "episode_plan"
+
     return "outline"
 
 
