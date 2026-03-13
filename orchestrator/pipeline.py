@@ -34,7 +34,7 @@ def _ctx_call(ctx, name, *args, **kwargs):
 
 
 def _trace(ctx, stage, message, preview="", status="running"):
-    _ctx_call(ctx, "append_trace", ctx["task_id"], stage, message=message, preview=preview, status=status)
+    _ctx_call(ctx, "append_trace", stage, message, status=status, preview=preview)
 
 
 def _extract_episode_block(episode_plan: str, episode_no: int) -> str:

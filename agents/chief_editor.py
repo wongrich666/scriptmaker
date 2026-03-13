@@ -227,7 +227,7 @@ def analyze_requirements(message, meta):
         "reference_text": reference_text if mode == "reskin" else "",
         "framework_text": framework_text if mode == "framework" else "",
         "banned": "、".join(banned_items),
-        "output_granularity": _guess_output_granularity(msg),
+        "output_granularity": _guess_output_granularity(msg, meta),
         "word_count_wan": word_count_wan,
         "episode_count": int(meta.get("episode_count") or 10),
         "current_episode_no": int(meta.get("current_episode_no") or 1),

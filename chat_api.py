@@ -19,6 +19,8 @@ import re
 import requests
 import time
 import store
+
+from services.artifact_service import save_episode_artifact as _service_save_episode_artifact
 from orchestrator.pipeline import run_workflow
 from requests.adapters import HTTPAdapter
 from requests.exceptions import ChunkedEncodingError, ConnectionError as RequestsConnectionError, RequestException
@@ -1534,6 +1536,25 @@ def get_project_trace(project_id):
     })
 
 
+def save_script_artifacts(project_id, user_message=None, **kwargs):
+    return _save_partial_artifacts(
+        project_id,
+        user_message=user_message,
+        **kwargs,
+    )
+
+def save_final_artifacts(project_id,user_message=None, **kwargs):
+    return _save_final_artifacts(
+        project_id,
+        user_message=user_message,
+        **kwargs,
+    )
+
+
+def _save_episode_artifact(project_id, episode_no, **kwargs):
+    return _service_save_episode_artifact(project_id, episode_no, **kwargs)
+
+
 def _run_multi_episode_script_generation(
     task_id,
     project_id,
@@ -1702,8 +1723,9 @@ def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, 
                 "append_trace": trace,
                 "update_task_stage": _update_task_stage,
                 "update_task_record": _update_task_record,
-                "save_partial_artifacts": save_partial,
-                "save_final_artifacts": save_final,
+                "save_script_artifacts": _save_partial_artifacts,
+                "save_final_artifacts": _save_final_artifacts,
+                "save_episode_artifact": _save_episode_artifact,
                 "safe_preview": _safe_preview,
             }
 
