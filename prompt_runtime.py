@@ -47,7 +47,7 @@ MODEL_MANIFEST = {
 }
 
 ALIASES = {
-    "character": "characters",
+    "character": "character_bible",
     "character_bible_json": "characters",
     "story_outline": "outline",
     "episode_plan": "outline",
