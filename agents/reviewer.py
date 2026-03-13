@@ -115,6 +115,75 @@ def review_episode_script(
     return merged
 
 
+def review_five_episode_consistency(
+    brief,
+    character_bible,
+    approved_outline,
+    approved_plan,
+    episode_batch,
+    batch_start,
+    batch_end,
+    llm_call,
+    selected_model,
+    previous_batch_review=None,
+):
+    """
+    对连续 5 集（或最后不足 5 集的一批）进行阶段性连贯性总审。
+    返回结构与现有 review_* 保持兼容，核心字段仍然包括：
+    passed / rewrite_required / score / summary / blocking_issues / text_report
+    """
+
+    batch_text = "\n\n".join(
+        [
+            f"===== 第{ep.get('episode_no', '?')}集 =====\n{ep.get('chapter_script', '')}"
+            for ep in episode_batch
+            if isinstance(ep, dict)
+        ]
+    ).strip()
+
+    data = {
+        "stage_name": "five_episode_consistency_review",
+        "story_brief": brief,
+        "character_bible": character_bible,
+        "approved_outline": approved_outline,
+        "approved_plan": approved_plan,
+        "episode_batch": batch_text,
+        "batch_range": f"第{batch_start}-{batch_end}集",
+        "previous_batch_review": previous_batch_review or "",
+        "output_granularity": "five_episode_consistency_review",
+        "genre": brief.get("genre", ""),
+        "style": brief.get("style", ""),
+        "core_conflict": brief.get("core_conflict", ""),
+        "banned_items": brief.get("banned_items", []),
+    }
+
+    prompt = compose_prompt(
+        "five_episode_consistency_review",
+        data,
+        mode=brief.get("mode"),
+    )
+
+    llm_review = safe_json_call(
+        prompt,
+        selected_model,
+        "reviewer",
+        llm_call=llm_call,
+    )
+
+    # 五集总审先不叠加名字/单集格式/钩子密度等单集规则，
+    # 避免误伤；这里只保留 LLM 总审结果即可。
+    merged = merge_rule_issues(llm_review)
+
+    # 给文本展示层补一个更明确的标题
+    batch_label = f"第{batch_start}-{batch_end}集"
+    merged["text_report"] = (
+        f"【五集连贯性总审：{batch_label}】\n"
+        + render_text_review(merged)
+    )
+
+    return merged
+
+
 # 兼容旧 pipeline 的兜底函数
 def review_artifacts(story_brief, character_bible, plot_outline, llm_call=None, selected_model=None):
     if llm_call is None or selected_model is None:

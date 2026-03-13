@@ -1038,6 +1038,7 @@ def _set_project_result(
     final_asset_text=None,
     character_bible=None,
     plot_outline=None,
+    episode_plan=None,
     review_report=None,
 ):
     with _CHAT_STORE_LOCK:
@@ -1052,6 +1053,8 @@ def _set_project_result(
             store["character_bible"] = character_bible
         if plot_outline is not None:
             store["plot_outline"] = plot_outline
+        if episode_plan is not None:
+            store["episode_plan"] = episode_plan
         if review_report is not None:
             store["review_report"] = review_report
         store["updated_at"] = _utc_now_iso()
@@ -1081,12 +1084,8 @@ def _load_project_meta_payload(script: ScriptModel) -> dict:
     }
 
 
-def _save_project_meta_payload(
-    script: ScriptModel,
-    *,
-    review_report=None,
-    final_review=None,
-):
+def _save_project_meta_payload(script: ScriptModel, *, review_report=None, final_review=None,
+                               episode_plan=episode_plan):
     payload = _load_project_meta_payload(script)
 
     if review_report is not None:
@@ -1175,6 +1174,7 @@ def _save_partial_artifacts(
     final_asset_text=None,
     character_bible=None,
     plot_outline=None,
+    episode_plan=None,
     review_report=None,
 ):
     script = ScriptModel.query.get(project_id)
@@ -1190,6 +1190,7 @@ def _save_partial_artifacts(
                 script,
                 review_report=review_report,
                 final_review=final_review,
+                episode_plan=episode_plan,
             )
         db.session.commit()
 
@@ -1200,6 +1201,7 @@ def _save_partial_artifacts(
         final_asset_text=final_asset_text,
         character_bible=character_bible,
         plot_outline=plot_outline,
+        episode_plan=episode_plan,
         review_report=review_report,
     )
 
@@ -1213,6 +1215,7 @@ def _save_final_artifacts(
     final_asset_text=None,
     character_bible=None,
     plot_outline=None,
+    episode_plan=None,
     review_report=None,
 ):
     script = ScriptModel.query.get(project_id)
@@ -1505,6 +1508,7 @@ def get_project_artifacts(project_id):
     plot_outline = (result.get("plot_outline", "") if result else "") or (script.outline or "")
     review_report = (result.get("review_report", "") if result else "") or meta_payload.get("review_report", "")
     final_asset_text = (result.get("final_asset_text", "") if result else "")
+    episode_plan = (result.get("episode_plan", "") if result else "") or meta_payload.get("episode_plan", "")
 
     return jsonify({
         'success': True,
@@ -1516,6 +1520,7 @@ def get_project_artifacts(project_id):
         'plot_outline': plot_outline,
         'review_report': review_report,
         'final_asset_text': final_asset_text,
+        'episode_plan': episode_plan,
     })
 
 
@@ -1723,8 +1728,16 @@ def _run_chat_generation(app, task_id, project_id, user_id, user_message, meta, 
                 "append_trace": trace,
                 "update_task_stage": _update_task_stage,
                 "update_task_record": _update_task_record,
-                "save_script_artifacts": _save_partial_artifacts,
-                "save_final_artifacts": _save_final_artifacts,
+                "save_script_artifacts": lambda project_id, **kwargs: save_script_artifacts(
+                    project_id,
+                    user_message=user_message,
+                    **kwargs,
+                ),
+                "save_final_artifacts": lambda project_id, **kwargs: save_final_artifacts(
+                    project_id,
+                    user_message=user_message,
+                    **kwargs,
+                ),
                 "save_episode_artifact": _save_episode_artifact,
                 "safe_preview": _safe_preview,
             }

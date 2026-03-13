@@ -20,10 +20,13 @@ PROMPT_MANIFEST = {
 
     "review_report": "core/review_report.txt",
     "review_report_json": "core/review_report_json.txt",
+    "five_episode_consistency_review": "core/five_episode_consistency_review.txt",
+
     "character_rewrite": "core/character_rewrite.txt",
     "outline_rewrite": "core/outline_rewrite.txt",
     "episode_plan_rewrite": "core/episode_plan_rewrite.txt",
     "single_episode_rewrite": "core/single_episode_rewrite.txt",
+
     "final_rewrite": "core/final_rewrite.txt",
     "chapter_script": "core/single_episode_script.txt",
 }
@@ -174,6 +177,13 @@ def build_structured_input_block(data: Dict[str, Any]) -> str:
         ("uncertainty_notes", "不确定项"),
         ("previous_state", "上一集状态"),
         ("current_episode_plan", "当前集计划"),
+        ("stage_name", "审核阶段"),
+        ("approved_outline", "已通过总纲"),
+        ("approved_plan", "已通过分集计划"),
+        ("episode_batch", "当前五集正文"),
+        ("batch_range", "审核批次范围"),
+        ("previous_batch_review", "上一轮批次审核"),
+        ("draft", "待审核正文"),
     ]
 
     lines = ["# Structured Input"]
