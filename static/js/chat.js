@@ -43,7 +43,7 @@ const STAGE_ORDER_MAP = {
     { stage: "character_bible", label: "角色基础" },
     { stage: "plot_outline", label: "分集计划" },
     { stage: "final_script", label: "多集剧本" }
-  ],
+  ]
 };
 
 const sendBtn = document.getElementById("sendBtn");
@@ -90,8 +90,6 @@ const bannedInput = document.getElementById("bannedInput");
 const currentEpisodeInput = document.getElementById("currentEpisodeInput");
 const episodeCounterText = document.getElementById("episodeCounterText");
 
-  episodeCounterText.textContent = `当前已生成 ${done} 集，共 ${total} 集`;
-}
 
 function getCurrentGranularity() {
   return granularitySelect ? granularitySelect.value : "outline";
@@ -737,7 +735,8 @@ function updateEpisodeCounter(task) {
     episodeCounterText.textContent = "";
     return;
   }
-
+  episodeCounterText.textContent = `当前已生成 ${done} 集，共 ${total} 集`;
+}
 
 document.querySelectorAll(".tab-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
